@@ -1,0 +1,63 @@
+name: NEPSE Daily Data Fetch
+
+on:
+  # Runs every NEPSE trading day (Sun-Thu) at 3:00 PM Nepal Time (NPT = UTC+5:45)
+  # 3:00 PM NPT = 09:15 AM UTC
+  schedule:
+    - cron: '15 9 * * 0,1,2,3,4'
+    #                   ^ ^ ^ ^ ^
+    #                   | | | | Day of week: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu
+    #                   | | | Month: * = every month
+    #                   | | Day of month: * = every day
+    #                   | Hour: 9 (UTC)
+    #                   Minute: 15
+
+  # Also allows you to run manually from GitHub website anytime
+  workflow_dispatch:
+
+jobs:
+  fetch-nepse-data:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # Step 1: Download your repo code onto the GitHub runner
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Install Python 3.11
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 3: Install dependencies from requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 4: Run your NEPSE script
+      - name: Run Nepse_API.py
+        run: python Nepse_API.py
+
+      # Step 5: Upload the output Excel file to Google Drive
+      - name: Upload Excel to Google Drive
+        uses: adityak74/google-drive-upload-git-action@main
+        with:
+          filename: "Combined_selected_symbols_*.xlsx"
+          # *** CHANGE THIS: Your Google Drive folder ID ***
+          # Get it from the URL when you open the folder in Google Drive:
+          # https://drive.google.com/drive/folders/THIS_PART_IS_THE_ID
+          folderId: ${{ secrets.GDRIVE_FOLDER_ID }}
+          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
+          overwrite: "true"
+
+      # Step 6: Save logs as downloadable artifact (viewable on GitHub)
+      - name: Upload run log as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nepse-log-${{ github.run_id }}
+          path: "*.xlsx"
+          retention-days: 30
