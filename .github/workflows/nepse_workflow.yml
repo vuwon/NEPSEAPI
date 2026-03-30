@@ -2,7 +2,8 @@ name: NEPSE Daily Data Fetch
 
 on:
   schedule:
-    - cron: '15 9 * * 0,1,2,3,4'
+    - cron: '30 9 * * 0,1,2,3,4'
+    # 3:15 PM Nepal Time (NPT = UTC+5:45) → 09:30 UTC
   workflow_dispatch:
 
 env:
@@ -11,7 +12,6 @@ env:
 jobs:
   fetch-nepse-data:
     runs-on: ubuntu-latest
-    # ✅ SAFETY NET: Entire job will force-stop after 30 minutes
     timeout-minutes: 30
 
     steps:
@@ -28,10 +28,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install google-api-python-client google-auth
         timeout-minutes: 5
 
-      # ✅ SAFETY NET: Script will force-stop after 20 minutes
       - name: Run Nepse_API.py
         run: python -u Nepse_API.py
         timeout-minutes: 20
@@ -43,65 +41,81 @@ jobs:
           ls -la
           find . -name "*.xlsx" 2>/dev/null || echo "No .xlsx files found"
 
-      - name: Upload Excel to Google Drive
+      # Send Excel file as email attachment to multiple recipients
+      - name: Send Excel via Gmail
         run: |
           python - <<'EOF'
-          import os, glob, json, base64
-          from googleapiclient.discovery import build
-          from googleapiclient.http import MediaFileUpload
-          from google.oauth2 import service_account
+          import os, glob, smtplib
+          from email.mime.multipart import MIMEMultipart
+          from email.mime.base import MIMEBase
+          from email.mime.text import MIMEText
+          from email import encoders
+          from datetime import date
 
-          creds_b64 = os.environ["GDRIVE_CREDENTIALS"]
-          creds_json = json.loads(base64.b64decode(creds_b64).decode("utf-8"))
+          # ── CONFIG ──────────────────────────────────────────────
+          # *** CHANGE THESE: Add all recipient emails here ***
+          RECIPIENTS = [
+              "thebhuwan@gmail.com",
+              "chakratirthasubarna@gmail.com@gmail.com",
+              "rajkarnikarm@gmail.com@gmail.com",
+          ]
+          # ────────────────────────────────────────────────────────
 
-          credentials = service_account.Credentials.from_service_account_info(
-              creds_json,
-              scopes=["https://www.googleapis.com/auth/drive"]
-          )
+          SENDER       = os.environ["GMAIL_ADDRESS"]
+          APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
+          TODAY        = date.today().strftime("%Y-%m-%d")
 
-          service = build("drive", "v3", credentials=credentials)
-          folder_id = os.environ["GDRIVE_FOLDER_ID"]
-
+          # Find the Excel file
           files = glob.glob("*.xlsx")
           if not files:
-              print("ERROR: No .xlsx file found!")
+              print("ERROR: No .xlsx file found to attach!")
               exit(1)
 
           filepath = files[0]
           filename = os.path.basename(filepath)
-          print(f"Uploading: {filename}")
+          print(f"Attaching: {filename}")
 
-          results = service.files().list(
-              q=f"name='{filename}' and '{folder_id}' in parents and trashed=false",
-              fields="files(id, name)"
-          ).execute()
-          existing = results.get("files", [])
+          # Build email
+          msg = MIMEMultipart()
+          msg["From"]    = SENDER
+          msg["To"]      = ", ".join(RECIPIENTS)
+          msg["Subject"] = f"NEPSE Daily Data — {TODAY}"
 
-          media = MediaFileUpload(
-              filepath,
-              mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          )
+          body = f"""
+          Hello,
 
-          if existing:
-              file_id = existing[0]["id"]
-              service.files().update(fileId=file_id, media_body=media).execute()
-              print(f"Updated existing file: {filename} (id: {file_id})")
-          else:
-              file_metadata = {"name": filename, "parents": [folder_id]}
-              result = service.files().create(
-                  body=file_metadata,
-                  media_body=media,
-                  fields="id"
-              ).execute()
-              print(f"Created new file: {filename} (id: {result.get('id')})")
+          Please find attached today's NEPSE floorsheet data for {TODAY}.
 
-          print("Upload to Google Drive successful!")
+          File: {filename}
+
+          This is an automated email sent daily at 3:15 PM Nepal Time.
+
+          Regards,
+          NEPSE Auto Fetch
+          """
+          msg.attach(MIMEText(body, "plain"))
+
+          # Attach the Excel file
+          with open(filepath, "rb") as f:
+              part = MIMEBase("application", "octet-stream")
+              part.set_payload(f.read())
+          encoders.encode_base64(part)
+          part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
+          msg.attach(part)
+
+          # Send via Gmail SMTP
+          print(f"Sending to: {', '.join(RECIPIENTS)}")
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+              server.login(SENDER, APP_PASSWORD)
+              server.sendmail(SENDER, RECIPIENTS, msg.as_string())
+
+          print(f"✅ Email sent successfully to {len(RECIPIENTS)} recipient(s)!")
           EOF
         env:
-          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-        timeout-minutes: 5
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
 
+      # Backup: also save as GitHub artifact
       - name: Save Excel as artifact
         if: always()
         uses: actions/upload-artifact@v4
