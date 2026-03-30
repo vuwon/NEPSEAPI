@@ -1,4 +1,7 @@
-nepse
+# NEPSE Unofficial API — must install from GitHub, NOT PyPI
+git+https://github.com/basic-bgnr/NepseUnofficialApi
+
+# Other dependencies
 pandas
 openpyxl
 requests
