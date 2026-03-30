@@ -1,19 +1,12 @@
 name: NEPSE Daily Data Fetch
 
 on:
-  # Runs every NEPSE trading day (Sun-Thu) at 3:00 PM Nepal Time (NPT = UTC+5:45)
-  # 3:00 PM NPT = 09:15 AM UTC
   schedule:
     - cron: '15 9 * * 0,1,2,3,4'
-    #                   ^ ^ ^ ^ ^
-    #                   | | | | Day of week: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu
-    #                   | | | Month: * = every month
-    #                   | | Day of month: * = every day
-    #                   | Hour: 9 (UTC)
-    #                   Minute: 15
-
-  # Also allows you to run manually from GitHub website anytime
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   fetch-nepse-data:
@@ -21,43 +14,100 @@ jobs:
 
     steps:
 
-      # Step 1: Download your repo code onto the GitHub runner
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Install Python 3.11
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # Step 3: Install dependencies from requirements.txt
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install google-api-python-client google-auth
 
-      # Step 4: Run your NEPSE script
       - name: Run Nepse_API.py
-        run: python Nepse_API.py
+        run: python -u Nepse_API.py
 
-      # Step 5: Upload the output Excel file to Google Drive
+      - name: List output files
+        if: always()
+        run: |
+          echo "=== Files in working directory ==="
+          ls -la
+          find . -name "*.xlsx" 2>/dev/null || echo "No .xlsx files found"
+
+      # Upload to Google Drive using Python script (most reliable method)
       - name: Upload Excel to Google Drive
-        uses: adityak74/google-drive-upload-git-action@main
-        with:
-          filename: "Combined_selected_symbols_*.xlsx"
-          # *** CHANGE THIS: Your Google Drive folder ID ***
-          # Get it from the URL when you open the folder in Google Drive:
-          # https://drive.google.com/drive/folders/THIS_PART_IS_THE_ID
-          folderId: ${{ secrets.GDRIVE_FOLDER_ID }}
-          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
-          overwrite: "true"
+        run: |
+          python - <<'EOF'
+          import os, glob, json, base64
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+          from google.oauth2 import service_account
 
-      # Step 6: Save logs as downloadable artifact (viewable on GitHub)
-      - name: Upload run log as artifact
+          # Load credentials from GitHub Secret (base64 encoded JSON)
+          creds_b64 = os.environ["GDRIVE_CREDENTIALS"]
+          creds_json = json.loads(base64.b64decode(creds_b64).decode("utf-8"))
+
+          credentials = service_account.Credentials.from_service_account_info(
+              creds_json,
+              scopes=["https://www.googleapis.com/auth/drive"]
+          )
+
+          service = build("drive", "v3", credentials=credentials)
+          folder_id = os.environ["GDRIVE_FOLDER_ID"]
+
+          # Find the Excel file
+          files = glob.glob("*.xlsx")
+          if not files:
+              print("ERROR: No .xlsx file found!")
+              exit(1)
+
+          filepath = files[0]
+          filename = os.path.basename(filepath)
+          print(f"Uploading: {filename}")
+
+          # Check if file already exists in Drive folder (for overwrite)
+          results = service.files().list(
+              q=f"name='{filename}' and '{folder_id}' in parents and trashed=false",
+              fields="files(id, name)"
+          ).execute()
+          existing = results.get("files", [])
+
+          media = MediaFileUpload(
+              filepath,
+              mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          )
+
+          if existing:
+              # Update existing file
+              file_id = existing[0]["id"]
+              service.files().update(fileId=file_id, media_body=media).execute()
+              print(f"Updated existing file: {filename} (id: {file_id})")
+          else:
+              # Create new file
+              file_metadata = {"name": filename, "parents": [folder_id]}
+              result = service.files().create(
+                  body=file_metadata,
+                  media_body=media,
+                  fields="id"
+              ).execute()
+              print(f"Created new file: {filename} (id: {result.get('id')})")
+
+          print("Upload to Google Drive successful!")
+          EOF
+        env:
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+
+      # Backup: also save as GitHub artifact
+      - name: Save Excel as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nepse-log-${{ github.run_id }}
-          path: "*.xlsx"
+          name: nepse-data-${{ github.run_id }}
+          path: "**/*.xlsx"
+          if-no-files-found: warn
           retention-days: 30
