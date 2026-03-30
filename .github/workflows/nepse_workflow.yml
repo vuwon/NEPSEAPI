@@ -11,6 +11,8 @@ env:
 jobs:
   fetch-nepse-data:
     runs-on: ubuntu-latest
+    # ✅ SAFETY NET: Entire job will force-stop after 30 minutes
+    timeout-minutes: 30
 
     steps:
 
@@ -27,9 +29,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install google-api-python-client google-auth
+        timeout-minutes: 5
 
+      # ✅ SAFETY NET: Script will force-stop after 20 minutes
       - name: Run Nepse_API.py
         run: python -u Nepse_API.py
+        timeout-minutes: 20
 
       - name: List output files
         if: always()
@@ -38,7 +43,6 @@ jobs:
           ls -la
           find . -name "*.xlsx" 2>/dev/null || echo "No .xlsx files found"
 
-      # Upload to Google Drive using Python script (most reliable method)
       - name: Upload Excel to Google Drive
         run: |
           python - <<'EOF'
@@ -47,7 +51,6 @@ jobs:
           from googleapiclient.http import MediaFileUpload
           from google.oauth2 import service_account
 
-          # Load credentials from GitHub Secret (base64 encoded JSON)
           creds_b64 = os.environ["GDRIVE_CREDENTIALS"]
           creds_json = json.loads(base64.b64decode(creds_b64).decode("utf-8"))
 
@@ -59,7 +62,6 @@ jobs:
           service = build("drive", "v3", credentials=credentials)
           folder_id = os.environ["GDRIVE_FOLDER_ID"]
 
-          # Find the Excel file
           files = glob.glob("*.xlsx")
           if not files:
               print("ERROR: No .xlsx file found!")
@@ -69,7 +71,6 @@ jobs:
           filename = os.path.basename(filepath)
           print(f"Uploading: {filename}")
 
-          # Check if file already exists in Drive folder (for overwrite)
           results = service.files().list(
               q=f"name='{filename}' and '{folder_id}' in parents and trashed=false",
               fields="files(id, name)"
@@ -82,12 +83,10 @@ jobs:
           )
 
           if existing:
-              # Update existing file
               file_id = existing[0]["id"]
               service.files().update(fileId=file_id, media_body=media).execute()
               print(f"Updated existing file: {filename} (id: {file_id})")
           else:
-              # Create new file
               file_metadata = {"name": filename, "parents": [folder_id]}
               result = service.files().create(
                   body=file_metadata,
@@ -101,8 +100,8 @@ jobs:
         env:
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        timeout-minutes: 5
 
-      # Backup: also save as GitHub artifact
       - name: Save Excel as artifact
         if: always()
         uses: actions/upload-artifact@v4
