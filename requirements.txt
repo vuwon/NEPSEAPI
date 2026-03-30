@@ -1,5 +1,4 @@
-- Python 3.11+
-- Flask 3.0.3
-- httpx[http2] 0.27.2
-- pywasm 1.2.2
-- tqdm 4.66.5
+nepse
+pandas
+openpyxl
+requests
