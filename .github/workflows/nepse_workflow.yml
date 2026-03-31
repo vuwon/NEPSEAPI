@@ -1,126 +1,269 @@
-name: NEPSE Daily Data Fetch
+name: NEPSE Daily Fetch + Dashboard
 
 on:
   schedule:
     - cron: '30 9 * * 0,1,2,3,4'
-    # 3:15 PM Nepal Time (NPT = UTC+5:45) → 09:30 UTC
+    # 3:15 PM Nepal Time (NPT = UTC+5:45) = 09:30 UTC
+    # Runs every Sun-Thu (NEPSE trading days)
   workflow_dispatch:
+    # Also allows manual trigger from GitHub Actions tab anytime
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  fetch-nepse-data:
+  fetch-and-dashboard:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    permissions:
+      contents: write   # needed to commit back to repo
 
     steps:
 
+      # ── 1. Checkout full repo history ─────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so we can push back
 
+      # ── 2. Python setup ───────────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      # ── 3. Install dependencies ───────────────────────────────────────
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pandas openpyxl
         timeout-minutes: 5
 
-      - name: Run Nepse_API.py
-        run: python -u Nepse_API.py
-        timeout-minutes: 20
-
-      - name: List output files
-        if: always()
-        run: |
-          echo "=== Files in working directory ==="
-          ls -la
-          find . -name "*.xlsx" 2>/dev/null || echo "No .xlsx files found"
-
-      # Send Excel file as email attachment to multiple recipients
-      - name: Send Excel via Gmail
+      # ── 4. Check if today is a NEPSE holiday ─────────────────────────
+      - name: Check NEPSE holiday
+        id: holiday
         run: |
           python - <<'EOF'
-          import os, glob, smtplib
+          import datetime, os
+
+          # *** UPDATE THIS LIST each year with official NEPSE holidays ***
+          HOLIDAYS = [
+              # 2026 Nepal Public Holidays
+              "2026-01-11",  # Prithvi Jayanti
+              "2026-01-14",  # Maghe Sankranti
+              "2026-02-19",  # Democracy Day
+              "2026-03-28",  # Ghode Jatra
+              "2026-04-14",  # New Year (Navabarsha)
+              "2026-05-01",  # Labour Day
+              "2026-05-12",  # Buddha Jayanti
+              "2026-09-17",  # Indra Jatra
+              "2026-10-02",  # Ghatasthapana
+              "2026-10-20",  # Phulpati
+              "2026-10-21",  # Maha Ashtami
+              "2026-10-22",  # Maha Nawami
+              "2026-10-23",  # Vijaya Dashami
+              "2026-11-15",  # Laxmi Puja
+              "2026-11-16",  # Govardhan Puja
+              "2026-11-17",  # Bhai Tika
+              "2026-12-29",  # Constitution Day
+          ]
+
+          today = datetime.date.today().strftime("%Y-%m-%d")
+          is_holiday = today in HOLIDAYS
+          print(f"Today: {today} | Holiday: {is_holiday}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"is_holiday={'true' if is_holiday else 'false'}\n")
+              f.write(f"today={today}\n")
+          EOF
+
+      # ── 5. Fetch today's floorsheet data ──────────────────────────────
+      - name: Fetch NEPSE floorsheet data
+        if: steps.holiday.outputs.is_holiday == 'false'
+        run: python -u Nepse_API.py
+        timeout-minutes: 25
+
+      # ── 6. Move today's Excel into /data folder ───────────────────────
+      - name: Move Excel to /data folder
+        if: steps.holiday.outputs.is_holiday == 'false'
+        run: |
+          mkdir -p data
+          # Move any new Excel files into data/
+          for f in Combined_selected_symbols_*.xlsx; do
+            [ -f "$f" ] && mv "$f" data/ && echo "Moved: $f" || true
+          done
+          echo "Files in data/:"
+          ls -la data/ | tail -10
+          echo "Total files: $(ls data/*.xlsx 2>/dev/null | wc -l)"
+
+      # ── 7. Compile all historical data + generate dashboard ───────────
+      - name: Compile holdings and generate dashboard
+        if: steps.holiday.outputs.is_holiday == 'false'
+        run: python -u compile_holdings.py
+        timeout-minutes: 15
+
+      # ── 8. Commit everything back to repo ─────────────────────────────
+      - name: Commit data and dashboard to repo
+        if: steps.holiday.outputs.is_holiday == 'false'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add data/ index.html holdings_summary.json || true
+
+          # Only commit if there are actual changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "NEPSE data update ${{ steps.holiday.outputs.today }}"
+            git push
+            echo "Committed and pushed!"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 9. Send daily email summary ───────────────────────────────────
+      - name: Send daily email summary
+        if: steps.holiday.outputs.is_holiday == 'false'
+        run: |
+          python - <<'EOF'
+          import os, json, smtplib
           from email.mime.multipart import MIMEMultipart
           from email.mime.base import MIMEBase
           from email.mime.text import MIMEText
           from email import encoders
           from datetime import date
 
-          # ── CONFIG ──────────────────────────────────────────────
-          # *** CHANGE THESE: Add all recipient emails here ***
+          # *** CHANGE THESE: Add recipient emails ***
           RECIPIENTS = [
               "thebhuwan@gmail.com",
               "chakratirthasubarna@gmail.com",
               "rajkarnikarm@gmail.com",
           ]
-          # ────────────────────────────────────────────────────────
 
           SENDER       = os.environ["GMAIL_ADDRESS"]
           APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
           TODAY        = date.today().strftime("%Y-%m-%d")
+          REPO         = os.environ.get("GITHUB_REPOSITORY","")
+          PAGES_URL    = f"https://{REPO.split('/')[0]}.github.io/{REPO.split('/')[1]}/"
+          RUN_URL      = f"https://github.com/{REPO}/actions/runs/{os.environ.get('GITHUB_RUN_ID','')}"
 
-          # Find the Excel file
-          files = glob.glob("*.xlsx")
-          if not files:
-              print("ERROR: No .xlsx file found to attach!")
-              exit(1)
+          try:
+              with open("holdings_summary.json") as f:
+                  data = json.load(f)
+              holdings  = data.get("holdings", [])
+              today_recs= [r for r in holdings if r.get("date")==TODAY or r.get("Date")==TODAY]
+              top10     = sorted(today_recs, key=lambda x: x.get("holding_qty",0), reverse=True)[:10]
+              table_rows= ""
+              for r in top10:
+                  nh = int(r.get("holding_qty",0))
+                  color = "#00e5a0" if nh>=0 else "#ff4d6a"
+                  table_rows += f"""<tr>
+                    <td style='padding:8px;border:1px solid #1f2d45;font-family:monospace;color:#00c8ff'>{r.get('Stock Symbol','')}</td>
+                    <td style='padding:8px;border:1px solid #1f2d45;text-align:center;font-family:monospace'>{r.get('broker','')}</td>
+                    <td style='padding:8px;border:1px solid #1f2d45;font-size:12px;color:#64748b'>{r.get('broker_name','')}</td>
+                    <td style='padding:8px;border:1px solid #1f2d45;text-align:right;color:{color};font-family:monospace'>{nh:,}</td>
+                  </tr>"""
+              total_recs = len(today_recs)
+              unique_sym = len(set(r.get("Stock Symbol") for r in today_recs))
+          except Exception as e:
+              table_rows = f"<tr><td colspan='4' style='padding:12px;color:#64748b'>Summary unavailable: {e}</td></tr>"
+              total_recs = "—"; unique_sym = "—"
 
-          filepath = files[0]
-          filename = os.path.basename(filepath)
-          print(f"Attaching: {filename}")
+          html = f"""<html><body style='background:#0a0f1e;color:#e2e8f0;font-family:sans-serif;padding:24px;margin:0'>
+          <div style='max-width:600px;margin:0 auto'>
+            <h2 style='color:#00c8ff;font-family:monospace;margin-bottom:4px'>NEPSE Holdings — {TODAY}</h2>
+            <p style='color:#64748b;font-size:13px;margin-bottom:20px'>Automated daily floorsheet analysis</p>
+            <div style='display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap'>
+              <div style='background:#111827;border:1px solid #1f2d45;border-radius:8px;padding:14px 18px;flex:1;min-width:120px'>
+                <div style='color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:1px'>Today Positions</div>
+                <div style='color:#00c8ff;font-size:22px;font-family:monospace;margin-top:4px'>{total_recs:,}</div>
+              </div>
+              <div style='background:#111827;border:1px solid #1f2d45;border-radius:8px;padding:14px 18px;flex:1;min-width:120px'>
+                <div style='color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:1px'>Unique Stocks</div>
+                <div style='color:#00c8ff;font-size:22px;font-family:monospace;margin-top:4px'>{unique_sym}</div>
+              </div>
+            </div>
+            <h3 style='color:#cdd9e5;margin-bottom:10px;font-size:13px;text-transform:uppercase;letter-spacing:1px'>Top 10 Holdings Today</h3>
+            <table style='width:100%;border-collapse:collapse;background:#111827;border-radius:8px;overflow:hidden;margin-bottom:20px'>
+              <thead><tr style='background:#1a2235'>
+                <th style='padding:9px;border:1px solid #1f2d45;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase'>Symbol</th>
+                <th style='padding:9px;border:1px solid #1f2d45;color:#64748b;font-size:11px;text-transform:uppercase'>Broker #</th>
+                <th style='padding:9px;border:1px solid #1f2d45;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase'>Broker Name</th>
+                <th style='padding:9px;border:1px solid #1f2d45;text-align:right;color:#64748b;font-size:11px;text-transform:uppercase'>Net Holding</th>
+              </tr></thead>
+              <tbody>{table_rows}</tbody>
+            </table>
+            <div style='margin-bottom:16px'>
+              <a href='{PAGES_URL}' style='display:inline-block;background:linear-gradient(135deg,#0090c8,#a855f7);color:#fff;padding:10px 20px;border-radius:7px;text-decoration:none;font-size:13px;font-weight:500'>
+                View Full Dashboard →
+              </a>
+            </div>
+            <p style='color:#4a6480;font-size:11px'>
+              Run log: <a href='{RUN_URL}' style='color:#00c8ff'>{RUN_URL}</a><br>
+              This is an automated email. Reply to unsubscribe.
+            </p>
+          </div></body></html>"""
 
-          # Build email
-          msg = MIMEMultipart()
+          msg = MIMEMultipart("alternative")
           msg["From"]    = SENDER
           msg["To"]      = ", ".join(RECIPIENTS)
-          msg["Subject"] = f"NEPSE Daily Data — {TODAY}"
+          msg["Subject"] = f"NEPSE Holdings Report — {TODAY}"
+          msg.attach(MIMEText(html, "html"))
 
-          body = f"""
-          Hello,
-
-          Please find attached today's NEPSE floorsheet data for {TODAY}.
-
-          File: {filename}
-
-          This is an automated email sent daily at 3:15 PM Nepal Time.
-
-          Regards,
-          NEPSE Auto Fetch
-          """
-          msg.attach(MIMEText(body, "plain"))
-
-          # Attach the Excel file
-          with open(filepath, "rb") as f:
-              part = MIMEBase("application", "octet-stream")
-              part.set_payload(f.read())
-          encoders.encode_base64(part)
-          part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
-          msg.attach(part)
-
-          # Send via Gmail SMTP
-          print(f"Sending to: {', '.join(RECIPIENTS)}")
-          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-              server.login(SENDER, APP_PASSWORD)
-              server.sendmail(SENDER, RECIPIENTS, msg.as_string())
-
-          print(f"✅ Email sent successfully to {len(RECIPIENTS)} recipient(s)!")
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+              s.login(SENDER, APP_PASSWORD)
+              s.sendmail(SENDER, RECIPIENTS, msg.as_string())
+          print(f"✅ Email sent to {len(RECIPIENTS)} recipient(s)")
           EOF
         env:
-          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
 
-      # Backup: also save as GitHub artifact
-      - name: Save Excel as artifact
+      # ── 10. Send failure notification ─────────────────────────────────
+      - name: Notify on failure
+        if: failure()
+        run: |
+          python - <<'EOF'
+          import os, smtplib
+          from email.mime.text import MIMEText
+          from datetime import date
+
+          RECIPIENTS   = ["yourname@gmail.com"]  # *** CHANGE THIS ***
+          SENDER       = os.environ.get("GMAIL_ADDRESS","")
+          APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD","")
+          if not SENDER: exit(0)
+
+          TODAY   = date.today().strftime("%Y-%m-%d")
+          REPO    = os.environ.get("GITHUB_REPOSITORY","")
+          RUN_URL = f"https://github.com/{REPO}/actions/runs/{os.environ.get('GITHUB_RUN_ID','')}"
+
+          msg = MIMEText(f"NEPSE workflow FAILED on {TODAY}.\n\nCheck logs: {RUN_URL}")
+          msg["From"]    = SENDER
+          msg["To"]      = ", ".join(RECIPIENTS)
+          msg["Subject"] = f"⚠️ NEPSE Workflow Failed — {TODAY}"
+
+          try:
+              with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+                  s.login(SENDER, APP_PASSWORD)
+                  s.sendmail(SENDER, RECIPIENTS, msg.as_string())
+              print("Failure notification sent.")
+          except Exception as e:
+              print(f"Could not send failure email: {e}")
+          EOF
+        env:
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+
+      # ── 11. Artifact backup ───────────────────────────────────────────
+      - name: Save artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nepse-data-${{ github.run_id }}
-          path: "**/*.xlsx"
+          name: nepse-${{ steps.holiday.outputs.today }}-${{ github.run_id }}
+          path: |
+            holdings_summary.json
+            data/*.xlsx
           if-no-files-found: warn
           retention-days: 30
