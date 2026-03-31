@@ -56,8 +56,9 @@ jobs:
           # *** CHANGE THESE: Add all recipient emails here ***
           RECIPIENTS = [
               "thebhuwan@gmail.com",
-              "chakratirthasubarna@gmail.com@gmail.com",
-              "rajkarnikarm@gmail.com@gmail.com",
+              "chakratirthasubarna@gmail.com",
+              "rajkarnikarm@gmail.com",
+              "nagarkotis116@gmail.com",
           ]
           # ────────────────────────────────────────────────────────
 
