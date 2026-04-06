@@ -87,18 +87,21 @@ def aggregate_one_file(df):
              .agg(buy_qty=("Quantity","sum"), buy_amt=("Amount (Rs)","sum"))
              .reset_index().rename(columns={"Buyer":"broker"}))
     sell_all = (df.groupby(grp+["Seller"])
-                  .agg(total_sale_qty=("Quantity","sum"))
+                  .agg(total_sale_qty=("Quantity","sum"), total_sale_amt=("Amount (Rs)","sum"))
                   .reset_index().rename(columns={"Seller":"broker"}))
     sell_ipo = (df[df["Quantity"]==IPO_QTY]
                   .groupby(grp+["Seller"])
-                  .agg(ipo_sale_qty=("Quantity","sum"))
+                  .agg(ipo_sale_qty=("Quantity","sum"), ipo_sale_amt=("Amount (Rs)","sum"))
                   .reset_index().rename(columns={"Seller":"broker"}))
     sell = sell_all.merge(sell_ipo, on=grp+["broker"], how="left")
     sell["ipo_sale_qty"]  = sell["ipo_sale_qty"].fillna(0)
+    sell["ipo_sale_amt"]  = sell["ipo_sale_amt"].fillna(0)
     sell["bulk_sale_qty"] = sell["total_sale_qty"] - sell["ipo_sale_qty"]
+    sell["bulk_sale_amt"] = sell["total_sale_amt"] - sell["ipo_sale_amt"]
     h = buy.merge(sell, on=grp+["broker"], how="outer").fillna(0)
     h["holding_qty"] = h["buy_qty"] - h["bulk_sale_qty"]
-    h["avg_rate"]    = (h["buy_amt"]/h["buy_qty"]).where(h["buy_qty"]>0,0).round(2)
+    # Avg rate = (buy amount - bulk sale amount) / holding qty
+    h["avg_rate"]    = ((h["buy_amt"] - h["bulk_sale_amt"]) / h["holding_qty"]).where(h["holding_qty"]>0, 0).round(2)
     h["broker"]      = h["broker"].astype(int)
     # ✅ DROP zero holdings immediately — biggest size reduction
     h = h[h["holding_qty"] != 0].copy()
@@ -154,10 +157,12 @@ def main():
                buy_amt       =("buy_amt",         "sum"),
                total_sale_qty=("total_sale_qty",  "sum"),
                ipo_sale_qty  =("ipo_sale_qty",    "sum"),
-               bulk_sale_qty =("bulk_sale_qty",   "sum"))
+               bulk_sale_qty =("bulk_sale_qty",   "sum"),
+               bulk_sale_amt =("bulk_sale_amt",   "sum"))
           .reset_index())
     h["holding_qty"] = h["buy_qty"] - h["bulk_sale_qty"]
-    h["avg_rate"]    = (h["buy_amt"]/h["buy_qty"]).where(h["buy_qty"]>0,0).round(2)
+    # Avg rate = (buy amount - bulk sale amount) / holding qty
+    h["avg_rate"]    = ((h["buy_amt"] - h["bulk_sale_amt"]) / h["holding_qty"]).where(h["holding_qty"]>0, 0).round(2)
     h = h[h["holding_qty"] != 0]  # ✅ keep only non-zero
     h = h.sort_values(["Stock Symbol","Date","holding_qty"],
                       ascending=[True,True,False]).reset_index(drop=True)
@@ -170,16 +175,19 @@ def main():
 
     # Cumulative
     cumul = (h.groupby(["Stock Symbol","broker"])
-              .agg(broker_name   =("broker_name",   "first"),
-                   security_name =("Security Name", "first"),
-                   total_buy_qty =("buy_qty",        "sum"),
-                   total_sale_qty=("total_sale_qty", "sum"),
-                   total_ipo_qty =("ipo_sale_qty",   "sum"),
-                   total_bulk_qty=("bulk_sale_qty",  "sum"),
-                   net_holding   =("holding_qty",    "sum"),
-                   avg_rate      =("avg_rate",       "mean"))
+              .agg(broker_name      =("broker_name",    "first"),
+                   security_name    =("Security Name",  "first"),
+                   total_buy_qty    =("buy_qty",         "sum"),
+                   total_sale_qty   =("total_sale_qty",  "sum"),
+                   total_ipo_qty    =("ipo_sale_qty",    "sum"),
+                   total_bulk_qty   =("bulk_sale_qty",   "sum"),
+                   net_holding      =("holding_qty",     "sum"),
+                   total_buy_amt    =("buy_amt",         "sum"),
+                   total_bulk_amt   =("bulk_sale_amt",   "sum"))
               .reset_index()
               .sort_values("net_holding", ascending=False))
+    # Avg rate = (total buy amount - total bulk sale amount) / net holding qty
+    cumul["avg_rate"] = ((cumul["total_buy_amt"] - cumul["total_bulk_amt"]) / cumul["net_holding"]).where(cumul["net_holding"]>0, 0).round(2)
 
     symbols = sorted(all_symbols)
     dates   = sorted(all_dates)
