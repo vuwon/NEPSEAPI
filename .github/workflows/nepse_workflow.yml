@@ -138,7 +138,7 @@ jobs:
           # *** CHANGE THESE: Add recipient emails ***
           RECIPIENTS = [
               "thebhuwan@gmail.com",
-              "chakratirthasubarna@gmail.com",
+              "cmcchovar@gmail.com",
               "rajkarnikarm@gmail.com",
           ]
 
