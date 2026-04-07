@@ -31,8 +31,7 @@ try:
 
     # Define your fixed list of stock symbols here
     selected_symbols = [
-        'BANDIPUR', 'BHCL', 'BUNGAL', 'CREST', 'DHEL', 'SAGAR', 'HIMSTAR', 'JHAPA', 'NMIC', 'OMPL', 'SAIL', 'SANVI', 'SWASTIK', 'SYPNL', 'TTL', 'SABBL', 'HFIN', 'RSML', 'SOHL'
-    ]  # Example: replace with your desired symbols
+            ]  # Example: replace with your desired symbols
 
     df = pd.DataFrame(floorsheet)
     combined_filename = f"Combined_selected_symbols_{today_str}.xlsx"
