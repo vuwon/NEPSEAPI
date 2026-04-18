@@ -2,9 +2,9 @@ name: NEPSE Daily Fetch + Dashboard
 
 on:
   schedule:
-    - cron: '30 9 * * 0,1,2,3,4'
-    # 3:15 PM Nepal Time = 09:30 UTC
-  workflow_dispatch:
+    - cron: '30 9 * * 1,2,3,4,5'
+    # 3:15 PM Nepal Time (NPT = UTC+5:45) = 09:30 UTC
+    # NEPSE now trades Monday to Friday
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -40,13 +40,24 @@ jobs:
           python - <<'EOF'
           import datetime, os
           HOLIDAYS = [
-              "2026-01-11","2026-01-14","2026-02-19","2026-03-28",
-              "2026-04-14","2026-05-01","2026-05-12","2026-09-17",
-              "2026-10-02","2026-10-20","2026-10-21","2026-10-22",
-              "2026-10-23","2026-11-15","2026-11-16","2026-11-17","2026-12-29",
+              # 2026 Nepal Public Holidays — update annually
+              "2026-01-14",  # Maghe Sankranti
+              "2026-02-19",  # Democracy Day
+              "2026-03-28",  # Ghode Jatra
+              "2026-04-14",  # New Year (Baisakh 1)
+              "2026-05-01",  # Labour Day
+              "2026-05-12",  # Buddha Jayanti
+              "2026-09-17",  # Indra Jatra
+              "2026-10-02",  # Ghatasthapana
+              "2026-10-20",  # Phulpati
+              "2026-10-21",  # Maha Ashtami
+              "2026-10-22",  # Maha Nawami
+              "2026-10-23",  # Vijaya Dashami
+              "2026-11-15",  # Laxmi Puja
+              "2026-11-16",  # Govardhan Puja
+              "2026-11-17",  # Bhai Tika
+              "2026-12-29",  # Constitution Day
           ]
-          today = datetime.date.today().strftime("%Y-%m-%d")
-          is_holiday = today in HOLIDAYS
           print(f"Today: {today} | Holiday: {is_holiday}")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"is_holiday={'true' if is_holiday else 'false'}\n")
