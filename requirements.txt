@@ -1,3 +1,4 @@
 httpx
 pandas
 openpyxl
+git+https://github.com/basic-bgnr/NepseUnofficialApi
