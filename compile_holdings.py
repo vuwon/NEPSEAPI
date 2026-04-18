@@ -799,17 +799,41 @@ function chpg(dir,t){{pg[t]+=dir;if(t==='d')renderD();else renderC();window.scro
 // Load all symbols into dropdown on page load
 async function loadSymbols() {{
   try {{
-    const r = await fetch(
-      `${{SUPABASE_URL}}/rest/v1/cumulative?select=symbol&order=symbol.asc`,
-      {{ headers: {{ 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${{SUPABASE_ANON_KEY}}` }} }}
-    );
-    const data = await r.json();
-    const symbols = [...new Set(data.map(d => d.symbol))].sort();
+    // Fetch all rows from cumulative, get unique symbols
+    let allSymbols = [];
+    let offset = 0;
+    const limit = 1000;
+    while(true) {{
+      const r = await fetch(
+        `${{SUPABASE_URL}}/rest/v1/cumulative?select=symbol&order=symbol.asc&limit=${{limit}}&offset=${{offset}}`,
+        {{ headers: {{
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${{SUPABASE_ANON_KEY}}`,
+            'Accept': 'application/json'
+        }} }}
+      );
+      if(!r.ok) {{
+        const err = await r.text();
+        console.error('Symbol load error:', r.status, err);
+        setStatus('Could not load symbols: ' + r.status, true);
+        return;
+      }}
+      const data = await r.json();
+      if(!data.length) break;
+      allSymbols.push(...data.map(d => d.symbol));
+      if(data.length < limit) break;
+      offset += limit;
+    }}
+    const symbols = [...new Set(allSymbols)].sort();
     const sel = document.getElementById('f-sym');
+    // Clear existing options except first
+    while(sel.options.length > 1) sel.remove(1);
     symbols.forEach(s => {{ sel.add(new Option(s, s)); }});
-    setStatus(`${{symbols.length}} symbols available — select one and click Search.`);
+    setStatus(`${{symbols.length}} symbols loaded — select one and click Search.`);
+    console.log('Symbols loaded:', symbols.length);
   }} catch(e) {{
-    setStatus('Could not load symbol list — type a symbol manually.', false);
+    console.error('loadSymbols error:', e);
+    setStatus('Could not load symbol list: ' + e.message, true);
   }}
 }}
 loadSymbols();
