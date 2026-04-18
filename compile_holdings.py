@@ -371,7 +371,7 @@ def main():
 def write_html():
     """Dashboard that queries Supabase directly from the browser."""
 
-    SUPABASE_URL = os.environ.get("SUPABASE_URL", "YOUR_SUPABASE_URL")
+    SUPABASE_URL = os.environ.get("SUPABASE_URL", "YOUR_SUPABASE_URL").rstrip('/')
     # Use anon key for browser (read-only public access)
     SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "YOUR_SUPABASE_ANON_KEY")
 
