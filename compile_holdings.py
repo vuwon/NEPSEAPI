@@ -804,14 +804,14 @@ async function loadSymbols() {{
     let offset = 0;
     const limit = 1000;
     while(true) {{
-      const r = await fetch(
-        `${{SUPABASE_URL}}/rest/v1/cumulative?select=symbol&order=symbol.asc&limit=${{limit}}&offset=${{offset}}`,
-        {{ headers: {{
+      const url = SUPABASE_URL + '/rest/v1/cumulative?select=symbol&order=symbol.asc&limit=' + limit + '&offset=' + offset;
+      const r = await fetch(url, {{
+        headers: {{
             'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${{SUPABASE_ANON_KEY}}`,
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
             'Accept': 'application/json'
-        }} }}
-      );
+        }}
+      }});
       if(!r.ok) {{
         const err = await r.text();
         console.error('Symbol load error:', r.status, err);
