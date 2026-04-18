@@ -107,18 +107,18 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
     <div class="sc"><div class="sc-label">Top Broker</div><div class="sc-val" id="s-top">—</div><div class="sc-sub" id="s-top-name">by net holding</div></div>
   </div>
 
-  <!-- Filters — Symbol is required to load data -->
+  <!-- Filters -->
   <div class="fp">
     <div class="fg"><label>Stock Symbol ★</label>
-      <input type="text" id="f-sym" placeholder="e.g. SAGAR, NABIL" style="text-transform:uppercase"></div>
+      <select id="f-sym"><option value="">-- Select Symbol --</option></select></div>
     <div class="fg"><label>Broker #</label>
       <input type="text" id="f-brk" placeholder="e.g. 58"></div>
     <div class="fg"><label>Broker Name</label>
       <input type="text" id="f-bname" placeholder="e.g. Sunrise"></div>
     <div class="fg"><label>Date From</label>
-      <input type="text" id="f-dfrom" placeholder="YYYY-MM-DD"></div>
+      <input type="date" id="f-dfrom"></div>
     <div class="fg"><label>Date To</label>
-      <input type="text" id="f-dto" placeholder="YYYY-MM-DD"></div>
+      <input type="date" id="f-dto"></div>
     <div class="fg"><label>Min Holding</label>
       <input type="text" id="f-minq" placeholder="e.g. 500"></div>
     <div class="fg"><label>Show</label>
@@ -228,13 +228,13 @@ function setStatus(msg, isError=false) {
 
 async function applyFilters() {
   if(loading) return;
-  const sym = document.getElementById('f-sym').value.trim().toUpperCase();
-  if(!sym) { setStatus('⚠ Please enter a stock symbol to search.', true); return; }
+  const sym = document.getElementById('f-sym').value.trim();
+  if(!sym) { setStatus('⚠ Please select a stock symbol to search.', true); return; }
 
   const brk   = document.getElementById('f-brk').value.trim();
   const bname  = document.getElementById('f-bname').value.trim().toLowerCase();
-  const dfrom  = document.getElementById('f-dfrom').value.trim();
-  const dto    = document.getElementById('f-dto').value.trim();
+  const dfrom  = document.getElementById('f-dfrom').value;
+  const dto    = document.getElementById('f-dto').value;
   const minq   = parseFloat(document.getElementById('f-minq').value)||null;
   const side   = document.getElementById('f-side').value;
 
@@ -306,7 +306,10 @@ function showSpinner() {
 }
 
 function resetFilters() {
-  ['f-sym','f-brk','f-bname','f-dfrom','f-dto','f-minq'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-sym').value='';
+  ['f-brk','f-bname','f-minq'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-dfrom').value='';
+  document.getElementById('f-dto').value='';
   document.getElementById('f-side').value='all';
   DAILY=[]; CUMUL=[]; FD=[]; FC=[];
   ['tbody-d','tbody-c'].forEach(id=>{
@@ -416,8 +419,23 @@ function showTab(name){
 }
 function chpg(dir,t){pg[t]+=dir;if(t==='d')renderD();else renderC();window.scrollTo({top:0,behavior:'smooth'});}
 
-// Allow Enter key to trigger search
-document.getElementById('f-sym').addEventListener('keydown', e=>{ if(e.key==='Enter') applyFilters(); });
+// Load all symbols into dropdown on page load
+async function loadSymbols() {
+  try {
+    const r = await fetch(
+      `$https://kthmokgpxkksyytvuvvl.supabase.co/rest/v1/cumulative?select=symbol&order=symbol.asc`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer $eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt0aG1va2dweGtrc3l5dHZ1dnZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0NzY3NzksImV4cCI6MjA5MjA1Mjc3OX0.cXHBwFuzaIvr9h5G8lniyfdngZO_1_b-EwkhIbcBKAg` } }
+    );
+    const data = await r.json();
+    const symbols = [...new Set(data.map(d => d.symbol))].sort();
+    const sel = document.getElementById('f-sym');
+    symbols.forEach(s => { sel.add(new Option(s, s)); });
+    setStatus(`${symbols.length} symbols available — select one and click Search.`);
+  } catch(e) {
+    setStatus('Could not load symbol list — type a symbol manually.', false);
+  }
+}
+loadSymbols();
 </script>
 </body>
 </html>
