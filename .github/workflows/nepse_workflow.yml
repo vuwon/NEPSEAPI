@@ -5,7 +5,7 @@ on:
     - cron: '30 9 * * 1,2,3,4,5'
     # 3:15 PM Nepal Time (NPT = UTC+5:45) = 09:30 UTC
     # NEPSE now trades Monday to Friday
-
+  workflow_dispatch:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
