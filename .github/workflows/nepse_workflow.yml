@@ -58,6 +58,8 @@ jobs:
               "2026-11-17",  # Bhai Tika
               "2026-12-29",  # Constitution Day
           ]
+          today = datetime.date.today().strftime("%Y-%m-%d")
+          is_holiday = today in HOLIDAYS
           print(f"Today: {today} | Holiday: {is_holiday}")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"is_holiday={'true' if is_holiday else 'false'}\n")
