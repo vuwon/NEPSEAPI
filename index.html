@@ -19,6 +19,91 @@ header{padding:16px 0;border-bottom:1px solid var(--border);position:sticky;top:
 .brand p{font-size:11px;color:var(--muted);margin-top:2px}
 .hdr-meta{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right;line-height:1.9}
 .hdr-meta b{color:var(--cyan)}
+
+/* MARKET SUMMARY */
+.ms-section{margin:20px 0 28px}
+.ms-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.ms-title{font-family:var(--mono);font-size:13px;color:var(--cyan);letter-spacing:1px}
+.ms-date{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.ms-loading{text-align:center;padding:40px;color:var(--muted);font-size:13px}
+.spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* SPOTLIGHT CARDS */
+.spotlight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px}
+.sp-card{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:16px;position:relative;overflow:hidden;cursor:pointer;transition:border-color .2s,transform .2s}
+.sp-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.sp-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px}
+.sp-card.buy::after{background:var(--cyan)}
+.sp-card.sell::after{background:var(--red)}
+.sp-card.hold::after{background:var(--green)}
+.sp-card.rate::after{background:var(--amber)}
+.sp-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px}
+.sp-sym{font-family:var(--mono);font-size:22px;font-weight:700;margin-bottom:2px}
+.sp-sym.buy{color:var(--cyan)}
+.sp-sym.sell{color:var(--red)}
+.sp-sym.hold{color:var(--green)}
+.sp-sym.rate{color:var(--amber)}
+.sp-name{font-size:11px;color:var(--muted);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-qty{font-size:13px;color:var(--text);font-family:var(--mono)}
+
+/* VOLUME TABLE */
+.vtw{background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px}
+.vtw-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
+.vtw-title{font-size:13px;font-weight:600}
+.vtcnt{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.tscroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead th{padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);text-align:left;background:var(--s2);cursor:pointer;user-select:none;white-space:nowrap;border-bottom:1px solid var(--border)}
+thead th:hover{color:var(--cyan)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--s2)}
+td{padding:8px 12px;font-size:13px;white-space:nowrap}
+.m{font-family:var(--mono);font-size:12px}
+.sym{font-family:var(--mono);font-weight:700;color:var(--cyan)}
+.pos{color:var(--green);font-family:var(--mono)}
+.neg{color:var(--red);font-family:var(--mono)}
+.brk{display:inline-block;background:rgba(0,200,255,.08);border:1px solid rgba(0,200,255,.2);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:11px;color:var(--cyan)}
+.brk.sell{background:rgba(255,77,106,.08);border-color:rgba(255,77,106,.2);color:var(--red)}
+.brk.hold{background:rgba(0,229,160,.08);border-color:rgba(0,229,160,.2);color:var(--green)}
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-family:var(--mono);font-size:11px;font-weight:600}
+.rank-1{background:rgba(255,184,48,.15);color:var(--amber);border:1px solid rgba(255,184,48,.3)}
+.rank-2{background:rgba(180,178,169,.1);color:#b4b2a9;border:1px solid rgba(180,178,169,.2)}
+.rank-3{background:rgba(240,153,123,.1);color:#f0997b;border:1px solid rgba(240,153,123,.2)}
+.rank-n{background:var(--s2);color:var(--muted);border:1px solid var(--border)}
+.vol-wrap{display:flex;align-items:center;gap:8px;min-width:120px}
+.vol-bar{height:4px;border-radius:2px;background:linear-gradient(90deg,var(--cyan2),var(--cyan))}
+.vol-track{flex:1;height:4px;background:var(--muted2);border-radius:2px;max-width:60px}
+
+/* SCRIPT DETAIL PANEL */
+.detail-panel{background:var(--s1);border:1px solid var(--cyan);border-radius:10px;padding:20px;margin-bottom:20px;display:none}
+.detail-panel.open{display:block}
+.dp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+.dp-sym{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--cyan)}
+.dp-close{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 12px;border-radius:5px;font-size:12px;cursor:pointer}
+.dp-close:hover{border-color:var(--red);color:var(--red)}
+.dp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.dp-stat{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:12px}
+.dp-stat-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px}
+.dp-stat-val{font-family:var(--mono);font-size:18px;font-weight:600}
+.dp-stat-val.c{color:var(--cyan)}
+.dp-stat-val.g{color:var(--green)}
+.dp-stat-val.r{color:var(--red)}
+.dp-stat-val.a{color:var(--amber)}
+
+/* WEEKLY CHART */
+.weekly-section{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:20px}
+.weekly-title{font-size:13px;font-weight:600;margin-bottom:16px;color:var(--text)}
+.weekly-bars{display:flex;flex-direction:column;gap:10px}
+.wrow{display:flex;align-items:center;gap:10px}
+.wrank{font-family:var(--mono);font-size:11px;color:var(--muted);width:20px;text-align:right;flex-shrink:0}
+.wsym{font-family:var(--mono);font-size:12px;color:var(--cyan);width:70px;flex-shrink:0;cursor:pointer}
+.wsym:hover{text-decoration:underline}
+.wtrack{flex:1;height:22px;background:var(--s2);border-radius:4px;overflow:hidden;border:1px solid var(--border)}
+.wfill{height:100%;background:linear-gradient(90deg,var(--cyan2),var(--cyan));display:flex;align-items:center;padding-left:8px;font-family:var(--mono);font-size:11px;color:#fff;min-width:2px;transition:width .6s ease}
+
+/* FILTER SECTION */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:20px 0}
 .sc{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s}
 .sc:hover{border-color:var(--border2);transform:translateY(-2px)}
@@ -29,7 +114,7 @@ header{padding:16px 0;border-bottom:1px solid var(--border);position:sticky;top:
 .fp{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
 .fg{display:flex;flex-direction:column;gap:4px;min-width:140px}
 .fg label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
-select,input[type=text]{background:var(--s2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;padding:6px 10px;outline:none;transition:border-color .2s;cursor:pointer;width:100%}
+select,input[type=text],input[type=date]{background:var(--s2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;padding:6px 10px;outline:none;transition:border-color .2s;cursor:pointer;width:100%}
 select:focus,input:focus{border-color:var(--cyan)}
 select option{background:var(--s2)}
 .btn{padding:7px 16px;border-radius:6px;border:none;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
@@ -46,26 +131,6 @@ select option{background:var(--s2)}
 .th2{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
 .ttitle{font-size:13px;font-weight:600}
 .tcnt{font-family:var(--mono);font-size:11px;color:var(--muted)}
-.tscroll{overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:680px}
-thead th{padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);text-align:left;background:var(--s2);cursor:pointer;user-select:none;white-space:nowrap;border-bottom:1px solid var(--border)}
-thead th:hover{color:var(--cyan)}
-tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
-tbody tr:last-child{border-bottom:none}
-tbody tr:hover{background:var(--s2)}
-td{padding:8px 12px;font-size:13px;white-space:nowrap}
-.m{font-family:var(--mono);font-size:12px}
-.sym{font-family:var(--mono);font-weight:600;color:var(--cyan)}
-.pos{color:var(--green);font-family:var(--mono)}
-.neg{color:var(--red);font-family:var(--mono)}
-.brk{display:inline-block;background:rgba(0,200,255,.08);border:1px solid rgba(0,200,255,.2);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:11px;color:var(--cyan)}
-.ipo{display:inline-block;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:11px;color:var(--purple)}
-.bname{font-size:11px;color:var(--muted);max-width:130px;overflow:hidden;text-overflow:ellipsis}
-.qcell{display:flex;align-items:center;gap:6px}
-.qbar{flex:1;height:3px;background:var(--muted2);border-radius:2px;min-width:30px;max-width:70px}
-.qfill{height:100%;border-radius:2px}
-.qfill.p{background:linear-gradient(90deg,var(--cyan),var(--green))}
-.qfill.n{background:linear-gradient(90deg,var(--red),#f97316)}
 .pag{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);flex-wrap:wrap;gap:8px}
 .pbtns{display:flex;gap:6px}
 .pb{padding:4px 11px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:12px;cursor:pointer;transition:all .2s}
@@ -81,13 +146,17 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
 .binfo .bnn{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btrack{flex:1;height:24px;background:var(--s2);border-radius:5px;overflow:hidden;border:1px solid var(--border)}
 .bfill{height:100%;background:linear-gradient(90deg,var(--cyan2),var(--cyan));display:flex;align-items:center;padding-left:8px;font-family:var(--mono);font-size:11px;color:#fff;transition:width .6s ease;min-width:2px}
-.loading{text-align:center;padding:48px;color:var(--muted)}
-.spinner{width:32px;height:32px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
-@keyframes spin{to{transform:rotate(360deg)}}
+.ipo{display:inline-block;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:11px;color:var(--purple)}
+.bname{font-size:11px;color:var(--muted);max-width:130px;overflow:hidden;text-overflow:ellipsis}
+.qcell{display:flex;align-items:center;gap:6px}
+.qbar{flex:1;height:3px;background:var(--muted2);border-radius:2px;min-width:30px;max-width:70px}
+.qfill{height:100%;border-radius:2px}
+.qfill.p{background:linear-gradient(90deg,var(--cyan),var(--green))}
+.qfill.n{background:linear-gradient(90deg,var(--red),#f97316)}
 .empty{text-align:center;padding:40px;color:var(--muted)}
 .status-bar{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px}
 .status-bar b{color:var(--cyan)}
-@media(max-width:768px){.stats{grid-template-columns:repeat(2,1fr)}.fp{flex-direction:column}.fg{min-width:100%}}
+@media(max-width:768px){.stats{grid-template-columns:repeat(2,1fr)}.fp{flex-direction:column}.fg{min-width:100%}.spotlight-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -96,115 +165,179 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
     <div class="brand-icon">📊</div>
     <div><h1>NEPSE · HOLDINGS</h1><p>Live broker-level floorsheet dashboard · powered by Supabase</p></div>
   </div>
-  <div class="hdr-meta">DB updated: <b id="gen-at">—</b><br>Data range: <b id="date-range">—</b></div>
+  <div class="hdr-meta">Updated: <b id="gen-at">—</b><br>Today: <b id="today-date">—</b></div>
 </div></div></header>
 
 <div class="wrap" style="padding-top:20px;padding-bottom:40px">
-  <div class="stats">
-    <div class="sc"><div class="sc-label">Positions</div><div class="sc-val" id="s-pos">—</div><div class="sc-sub">filtered results</div></div>
-    <div class="sc"><div class="sc-label">Brokers</div><div class="sc-val" id="s-brk">—</div><div class="sc-sub">active in view</div></div>
-    <div class="sc"><div class="sc-label">Net Holdings</div><div class="sc-val" id="s-net">—</div><div class="sc-sub">filtered total qty</div></div>
-    <div class="sc"><div class="sc-label">Top Broker</div><div class="sc-val" id="s-top">—</div><div class="sc-sub" id="s-top-name">by net holding</div></div>
-  </div>
 
-  <!-- Filters -->
-  <div class="fp">
-    <div class="fg"><label>Stock Symbol ★</label>
-      <select id="f-sym"><option value="">-- Select Symbol --</option></select></div>
-    <div class="fg"><label>Broker #</label>
-      <input type="text" id="f-brk" placeholder="e.g. 58"></div>
-    <div class="fg"><label>Broker Name</label>
-      <input type="text" id="f-bname" placeholder="e.g. Sunrise"></div>
-    <div class="fg"><label>Date From</label>
-      <input type="date" id="f-dfrom"></div>
-    <div class="fg"><label>Date To</label>
-      <input type="date" id="f-dto"></div>
-    <div class="fg"><label>Min Holding</label>
-      <input type="text" id="f-minq" placeholder="e.g. 500"></div>
-    <div class="fg"><label>Show</label>
-      <select id="f-side">
-        <option value="all">All positions</option>
-        <option value="pos">Positive only</option>
-        <option value="neg">Negative only</option>
-      </select></div>
-    <div class="btns">
-      <button class="btn btn-p" onclick="applyFilters()">Search</button>
-      <button class="btn btn-g" onclick="resetFilters()">Reset</button>
+  <!-- ══ MARKET SUMMARY (always shown at top) ══ -->
+  <div class="ms-section">
+    <div class="ms-header">
+      <span class="ms-title">Market Summary</span>
+      <span class="ms-date" id="ms-date-label">Loading today's data…</span>
     </div>
-  </div>
 
-  <div class="status-bar" id="status">Enter a stock symbol above and click Search to load data.</div>
+    <!-- Spotlight cards -->
+    <div id="spotlight-cards">
+      <div class="ms-loading"><div class="spinner"></div>Loading market data…</div>
+    </div>
 
-  <div class="tabs">
-    <div class="tab active" onclick="showTab('daily')">Daily Holdings</div>
-    <div class="tab" onclick="showTab('cumul')">Cumulative</div>
-    <div class="tab" onclick="showTab('topb')">Top Brokers Chart</div>
-  </div>
-
-  <!-- Daily Holdings -->
-  <div id="tab-daily">
-    <div class="tw">
-      <div class="th2"><span class="ttitle">Daily Holdings per Broker</span><span class="tcnt" id="cnt-d">—</span></div>
-      <div class="tscroll"><table>
-        <thead><tr>
-          <th onclick="srtD('date')">Date ↕</th>
-          <th>Symbol</th>
-          <th onclick="srtD('broker')">Broker # ↕</th>
-          <th>Broker Name</th>
-          <th onclick="srtD('buy_qty')">Buy Qty ↕</th>
-          <th onclick="srtD('total_sale_qty')">Sale Qty ↕</th>
-          <th onclick="srtD('ipo_sale_qty')">IPO Sale ↕</th>
-          <th onclick="srtD('bulk_sale_qty')">Bulk Sale ↕</th>
-          <th onclick="srtD('holding_qty')">Net Holding ↕</th>
-          <th onclick="srtD('avg_rate')">Avg Rate ↕</th>
-        </tr></thead>
-        <tbody id="tbody-d"><tr><td colspan="10"><div class="empty">Enter a symbol and click Search.</div></td></tr></tbody>
-      </table></div>
-      <div class="pag">
-        <span id="pi-d">—</span>
-        <div class="pbtns">
-          <button class="pb" id="pp-d" onclick="chpg(-1,'d')" disabled>← Prev</button>
-          <button class="pb" id="pn-d" onclick="chpg(1,'d')"  disabled>Next →</button>
+    <!-- Script detail panel (shown when row clicked) -->
+    <div class="detail-panel" id="detail-panel">
+      <div class="dp-header">
+        <span class="dp-sym" id="dp-sym">—</span>
+        <button class="dp-close" onclick="closeDetail()">✕ Close</button>
+      </div>
+      <div class="dp-grid" id="dp-stats"></div>
+      <div class="vtw">
+        <div class="th2">
+          <span class="ttitle">Daily breakdown — <span id="dp-sym2">—</span></span>
+          <span class="vtcnt" id="dp-cnt">—</span>
         </div>
+        <div class="tscroll">
+          <table>
+            <thead><tr>
+              <th>Date</th>
+              <th>Rank</th>
+              <th onclick="sortDetail('volume')">Volume ↕</th>
+              <th onclick="sortDetail('buy_qty')">Buy Qty ↕</th>
+              <th onclick="sortDetail('total_sale_qty')">Sell Qty ↕</th>
+              <th>Top Buyer</th>
+              <th>Top Seller</th>
+              <th>Top Holder</th>
+              <th onclick="sortDetail('avg_rate')">Avg Rate ↕</th>
+            </tr></thead>
+            <tbody id="dp-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- High volume table -->
+    <div class="vtw" id="vol-table-wrap">
+      <div class="vtw-header">
+        <span class="vtw-title">Top scripts by volume today</span>
+        <span class="vtcnt" id="vol-cnt">—</span>
+      </div>
+      <div class="tscroll">
+        <table>
+          <thead><tr>
+            <th>#</th>
+            <th>Symbol</th>
+            <th>Security Name</th>
+            <th onclick="sortVol('volume')">Total Volume ↕</th>
+            <th onclick="sortVol('buy_qty')">Buy Vol ↕</th>
+            <th onclick="sortVol('total_sale_qty')">Sell Vol ↕</th>
+            <th>Top Buyer</th>
+            <th>Top Seller</th>
+            <th>Top Holder</th>
+            <th onclick="sortVol('avg_rate')">Avg Rate ↕</th>
+          </tr></thead>
+          <tbody id="vol-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Weekly top 10 -->
+    <div class="weekly-section">
+      <div class="weekly-title">Top 10 scripts by volume — last 5 trading days</div>
+      <div class="weekly-bars" id="weekly-bars">
+        <div class="ms-loading"><div class="spinner"></div>Loading weekly data…</div>
       </div>
     </div>
   </div>
 
-  <!-- Cumulative -->
-  <div id="tab-cumul" style="display:none">
-    <div class="tw">
-      <div class="th2"><span class="ttitle">Cumulative Net Holdings</span><span class="tcnt" id="cnt-c">—</span></div>
-      <div class="tscroll"><table>
-        <thead><tr>
-          <th>Rank</th>
-          <th>Symbol</th>
-          <th onclick="srtC('broker')">Broker # ↕</th>
-          <th>Broker Name</th>
-          <th onclick="srtC('total_buy_qty')">Total Buy ↕</th>
-          <th onclick="srtC('total_sale_qty')">Total Sale ↕</th>
-          <th onclick="srtC('total_ipo_qty')">IPO Sale ↕</th>
-          <th onclick="srtC('total_bulk_qty')">Bulk Sale ↕</th>
-          <th onclick="srtC('net_holding')">Net Holding ↕</th>
-          <th onclick="srtC('avg_rate')">Avg Rate ↕</th>
-        </tr></thead>
-        <tbody id="tbody-c"><tr><td colspan="10"><div class="empty">Enter a symbol and click Search.</div></td></tr></tbody>
-      </table></div>
-      <div class="pag">
-        <span id="pi-c">—</span>
-        <div class="pbtns">
-          <button class="pb" id="pp-c" onclick="chpg(-1,'c')" disabled>← Prev</button>
-          <button class="pb" id="pn-c" onclick="chpg(1,'c')"  disabled>Next →</button>
+  <!-- ══ HOLDINGS FILTERS + TABS ══ -->
+  <div style="border-top:1px solid var(--border);padding-top:20px;margin-top:4px">
+
+    <div class="stats">
+      <div class="sc"><div class="sc-label">Positions</div><div class="sc-val" id="s-pos">—</div><div class="sc-sub">filtered results</div></div>
+      <div class="sc"><div class="sc-label">Brokers</div><div class="sc-val" id="s-brk">—</div><div class="sc-sub">active in view</div></div>
+      <div class="sc"><div class="sc-label">Net Holdings</div><div class="sc-val" id="s-net">—</div><div class="sc-sub">filtered total qty</div></div>
+      <div class="sc"><div class="sc-label">Top Broker</div><div class="sc-val" id="s-top">—</div><div class="sc-sub" id="s-top-name">by net holding</div></div>
+    </div>
+
+    <div class="fp">
+      <div class="fg"><label>Stock Symbol ★</label>
+        <select id="f-sym"><option value="">-- Select Symbol --</option></select></div>
+      <div class="fg"><label>Broker #</label><input type="text" id="f-brk" placeholder="e.g. 58"></div>
+      <div class="fg"><label>Broker Name</label><input type="text" id="f-bname" placeholder="e.g. Sunrise"></div>
+      <div class="fg"><label>Date From</label><input type="date" id="f-dfrom"></div>
+      <div class="fg"><label>Date To</label><input type="date" id="f-dto"></div>
+      <div class="fg"><label>Min Holding</label><input type="text" id="f-minq" placeholder="e.g. 500"></div>
+      <div class="fg"><label>Show</label>
+        <select id="f-side">
+          <option value="all">All positions</option>
+          <option value="pos">Positive only</option>
+          <option value="neg">Negative only</option>
+        </select></div>
+      <div class="btns">
+        <button class="btn btn-p" onclick="applyFilters()">Search</button>
+        <button class="btn btn-g" onclick="resetFilters()">Reset</button>
+      </div>
+    </div>
+
+    <div class="status-bar" id="status">Select a stock symbol above and click Search.</div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('daily')">Daily Holdings</div>
+      <div class="tab" onclick="showTab('cumul')">Cumulative</div>
+      <div class="tab" onclick="showTab('topb')">Top Brokers Chart</div>
+    </div>
+
+    <div id="tab-daily">
+      <div class="tw">
+        <div class="th2"><span class="ttitle">Daily Holdings per Broker per Stock</span><span class="tcnt" id="cnt-d">—</span></div>
+        <div class="tscroll"><table>
+          <thead><tr>
+            <th onclick="srtD('date')">Date ↕</th><th onclick="srtD('symbol')">Symbol ↕</th>
+            <th onclick="srtD('broker')">Broker # ↕</th><th>Broker Name</th>
+            <th onclick="srtD('buy_qty')">Buy Qty ↕</th><th onclick="srtD('total_sale_qty')">Sale Qty ↕</th>
+            <th onclick="srtD('ipo_sale_qty')">IPO Sale ↕</th><th onclick="srtD('bulk_sale_qty')">Bulk Sale ↕</th>
+            <th onclick="srtD('holding_qty')">Net Holding ↕</th><th onclick="srtD('avg_rate')">Avg Rate ↕</th>
+          </tr></thead>
+          <tbody id="tbody-d"><tr><td colspan="10"><div class="empty">Select a symbol and click Search.</div></td></tr></tbody>
+        </table></div>
+        <div class="pag">
+          <span id="pi-d">—</span>
+          <div class="pbtns">
+            <button class="pb" id="pp-d" onclick="chpg(-1,'d')" disabled>← Prev</button>
+            <button class="pb" id="pn-d" onclick="chpg(1,'d')"  disabled>Next →</button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Top Brokers Chart -->
-  <div id="tab-topb" style="display:none">
-    <div class="cw">
-      <div class="ctitle" id="chart-title">Top 10 Brokers by Cumulative Net Holdings</div>
-      <div class="barchart" id="barchart"><div class="empty">Enter a symbol and click Search.</div></div>
+    <div id="tab-cumul" style="display:none">
+      <div class="tw">
+        <div class="th2"><span class="ttitle">Cumulative Net Holdings (All Dates)</span><span class="tcnt" id="cnt-c">—</span></div>
+        <div class="tscroll"><table>
+          <thead><tr>
+            <th>Rank</th><th onclick="csrt('symbol')">Symbol ↕</th>
+            <th onclick="csrt('broker')">Broker # ↕</th><th>Broker Name</th>
+            <th onclick="csrt('total_buy_qty')">Total Buy ↕</th><th onclick="csrt('total_sale_qty')">Total Sale ↕</th>
+            <th onclick="csrt('total_ipo_qty')">IPO Sale ↕</th><th onclick="csrt('total_bulk_qty')">Bulk Sale ↕</th>
+            <th onclick="csrt('net_holding')">Net Holding ↕</th><th onclick="csrt('avg_rate')">Avg Rate ↕</th>
+          </tr></thead>
+          <tbody id="tbody-c"></tbody>
+        </table></div>
+        <div class="pag">
+          <span id="pi-c">—</span>
+          <div class="pbtns">
+            <button class="pb" id="pp-c" onclick="chpg(-1,'c')" disabled>← Prev</button>
+            <button class="pb" id="pn-c" onclick="chpg(1,'c')"  disabled>Next →</button>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <div id="tab-topb" style="display:none">
+      <div class="cw">
+        <div class="ctitle" id="chart-title">Select a stock symbol to see top brokers</div>
+        <div class="barchart" id="barchart"><div class="empty">Use the Stock Symbol filter above and click Search.</div></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -213,253 +346,521 @@ const SUPABASE_URL = "https://kthmokgpxkksyytvuvvl.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt0aG1va2dweGtrc3l5dHZ1dnZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0NzY3NzksImV4cCI6MjA5MjA1Mjc3OX0.cXHBwFuzaIvr9h5G8lniyfdngZO_1_b-EwkhIbcBKAg";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let DAILY=[], CUMUL=[], FD=[], FC=[];
-let dCol='holding_qty', dAsc=false, cCol='net_holding', cAsc=false;
-let pg={d:1, c:1};
+// ── STATE ──────────────────────────────────────────────────────────────────
+let DAILY=[],CUMUL=[],FD=[],FC=[];
+let dCol='holding_qty',dAsc=false,cCol='net_holding',cAsc=false;
+let pg={d:1,c:1};
 const PS=50;
 let loading=false;
+let VOL_DATA=[];
+let volCol='volume',volAsc=false;
+let DETAIL_DATA=[],detCol='volume',detAsc=false;
+let TODAY_STR='';
 
-function setStatus(msg, isError=false) {
-  const el = document.getElementById('status');
-  el.innerHTML = msg;
-  el.style.borderColor = isError ? 'var(--red)' : 'var(--border)';
-  el.style.color = isError ? 'var(--red)' : 'var(--muted)';
+// ── HELPERS ────────────────────────────────────────────────────────────────
+const fmt  = n => Number(n||0).toLocaleString();
+const fmtf = n => Number(n||0).toFixed(2);
+function getToday(){
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+function getLast5TradingDays(){
+  const days=[]; let d=new Date(); let count=0;
+  while(count<5){
+    const dow=d.getDay();
+    if(dow>=1 && dow<=5) { days.push(d.toISOString().split('T')[0]); count++; }
+    d.setDate(d.getDate()-1);
+  }
+  return days;
+}
+function rankBadge(n){
+  const cls=['rank-1','rank-2','rank-3'][n-1]||'rank-n';
+  const label=['🥇','🥈','🥉'][n-1]||n;
+  return '<span class="rank-badge '+cls+'">'+label+'</span>';
 }
 
-async function applyFilters() {
-  if(loading) return;
-  const sym = document.getElementById('f-sym').value.trim();
-  if(!sym) { setStatus('⚠ Please select a stock symbol to search.', true); return; }
-
-  const brk   = document.getElementById('f-brk').value.trim();
-  const bname  = document.getElementById('f-bname').value.trim().toLowerCase();
-  const dfrom  = document.getElementById('f-dfrom').value;
-  const dto    = document.getElementById('f-dto').value;
-  const minq   = parseFloat(document.getElementById('f-minq').value)||null;
-  const side   = document.getElementById('f-side').value;
-
-  loading = true;
-  setStatus(`<span>Loading data for <b>${sym}</b>…</span>`);
-  showSpinner();
+// ── MARKET SUMMARY ─────────────────────────────────────────────────────────
+async function loadMarketSummary(){
+  TODAY_STR = getToday();
+  document.getElementById('today-date').textContent = TODAY_STR;
+  document.getElementById('gen-at').textContent = new Date().toLocaleTimeString();
+  document.getElementById('ms-date-label').textContent = 'Today: ' + TODAY_STR;
 
   try {
-    // ── Fetch daily holdings ──────────────────────────────────────
-    let dq = sb.from('holdings').select('*').eq('symbol', sym).order('date', {ascending:false}).order('holding_qty', {ascending:false});
-    if(brk)   dq = dq.eq('broker', parseInt(brk));
-    if(dfrom) dq = dq.gte('date', dfrom);
-    if(dto)   dq = dq.lte('date', dto);
-    if(side==='pos') dq = dq.gt('holding_qty', 0);
-    if(side==='neg') dq = dq.lt('holding_qty', 0);
-    if(minq!==null)  dq = dq.gte('holding_qty', side==='neg'?-999999999:minq);
-    dq = dq.limit(5000);
-
-    const {data: ddata, error: derr} = await dq;
-    if(derr) throw derr;
-
-    // ── Fetch cumulative ──────────────────────────────────────────
-    let cq = sb.from('cumulative').select('*').eq('symbol', sym).order('net_holding', {ascending:false});
-    if(brk)   cq = cq.eq('broker', parseInt(brk));
-    if(bname) cq = cq.ilike('broker_name', `%${bname}%`);
-
-    const {data: cdata, error: cerr} = await cq;
-    if(cerr) throw cerr;
-
-    // Client-side broker name filter on daily (Supabase ilike on daily too)
-    DAILY = (ddata||[]).filter(r=> !bname || (r.broker_name||'').toLowerCase().includes(bname));
-    CUMUL = cdata||[];
-    FD=[...DAILY]; FC=[...CUMUL];
-
-    // Update stats
-    const dates = [...new Set(DAILY.map(r=>r.date))];
-    const net   = DAILY.reduce((s,r)=>s+(r.holding_qty||0),0);
-    const top   = CUMUL.length ? CUMUL[0] : null;
-    document.getElementById('s-pos').textContent  = DAILY.length.toLocaleString();
-    document.getElementById('s-brk').textContent  = new Set(DAILY.map(r=>r.broker)).size;
-    document.getElementById('s-net').textContent  = Math.round(net).toLocaleString();
-    document.getElementById('s-top').textContent  = top ? top.broker : '—';
-    document.getElementById('s-top-name').textContent = top ? (top.broker_name||'') : 'by net holding';
-
-    // Date range
-    if(dates.length) {
-      const sorted = dates.sort();
-      document.getElementById('date-range').textContent = `${sorted[0]} → ${sorted[sorted.length-1]}`;
+    // Fetch all holdings for today
+    let allRows=[], offset=0, limit=1000;
+    while(true){
+      const {data,error} = await sb.from('holdings').select('*')
+        .eq('date', TODAY_STR).range(offset, offset+limit-1);
+      if(error) throw error;
+      allRows.push(...(data||[]));
+      if(!data || data.length < limit) break;
+      offset += limit;
     }
-    document.getElementById('gen-at').textContent = new Date().toLocaleTimeString();
 
-    pg.d=1; pg.c=1;
-    renderD(); renderC(); renderChart(sym);
-    setStatus(`<b>${DAILY.length.toLocaleString()}</b> daily positions · <b>${CUMUL.length}</b> broker cumulative positions for <b>${sym}</b>`);
+    if(!allRows.length){
+      document.getElementById('spotlight-cards').innerHTML =
+        '<div class="ms-loading">No data for today (' + TODAY_STR + '). Market may be closed or data not yet fetched.</div>';
+      document.getElementById('vol-tbody').innerHTML =
+        '<tr><td colspan="10"><div class="empty">No data for today.</div></td></tr>';
+      document.getElementById('weekly-bars').innerHTML =
+        '<div class="ms-loading">No recent data available.</div>';
+      return;
+    }
+
+    // ── Aggregate by symbol ──────────────────────────────────────────────
+    const symMap = {};
+    for(const r of allRows){
+      const s = r.symbol;
+      if(!symMap[s]) symMap[s] = {
+        symbol:s, security_name:r.security_name||s,
+        buy_qty:0, total_sale_qty:0, volume:0,
+        brokers:[], buy_brokers:{}, sell_brokers:{}
+      };
+      const sm = symMap[s];
+      sm.buy_qty        += (r.buy_qty||0);
+      sm.total_sale_qty += (r.total_sale_qty||0);
+      sm.volume         += (r.buy_qty||0) + (r.total_sale_qty||0);
+      sm.brokers.push(r);
+      // track top buyer
+      if(!sm.buy_brokers[r.broker]) sm.buy_brokers[r.broker]={broker:r.broker,name:r.broker_name||'',qty:0};
+      sm.buy_brokers[r.broker].qty += (r.buy_qty||0);
+      // track top seller
+      if(!sm.sell_brokers[r.broker]) sm.sell_brokers[r.broker]={broker:r.broker,name:r.broker_name||'',qty:0};
+      sm.sell_brokers[r.broker].qty += (r.total_sale_qty||0);
+    }
+
+    // Fetch cumulative for top holder
+    const symbols = Object.keys(symMap);
+    const {data:cData} = await sb.from('cumulative').select('symbol,broker,broker_name,net_holding,avg_rate')
+      .in('symbol', symbols.slice(0,50));
+    const cumBySymbol = {};
+    for(const r of (cData||[])){
+      if(!cumBySymbol[r.symbol] || r.net_holding > cumBySymbol[r.symbol].net_holding)
+        cumBySymbol[r.symbol] = r;
+    }
+
+    // Build VOL_DATA sorted by volume desc
+    VOL_DATA = Object.values(symMap).map(sm => {
+      const topBuyer  = Object.values(sm.buy_brokers).sort((a,b)=>b.qty-a.qty)[0]||{};
+      const topSeller = Object.values(sm.sell_brokers).sort((a,b)=>b.qty-a.qty)[0]||{};
+      const topHolder = cumBySymbol[sm.symbol]||{};
+      return {
+        symbol       : sm.symbol,
+        security_name: sm.security_name,
+        buy_qty      : sm.buy_qty,
+        total_sale_qty: sm.total_sale_qty,
+        volume       : sm.volume,
+        top_buyer    : topBuyer.broker||'—',
+        top_buyer_name: topBuyer.name||'',
+        top_buyer_qty: topBuyer.qty||0,
+        top_seller   : topSeller.broker||'—',
+        top_seller_name: topSeller.name||'',
+        top_seller_qty: topSeller.qty||0,
+        top_holder   : topHolder.broker||'—',
+        top_holder_name: topHolder.broker_name||'',
+        top_holder_qty: topHolder.net_holding||0,
+        avg_rate     : topHolder.avg_rate||0,
+      };
+    }).sort((a,b)=>b.volume-a.volume);
+
+    renderVolTable();
+    renderSpotlight();
+    await loadWeekly();
 
   } catch(e) {
-    setStatus(`Error: ${e.message||e}`, true);
-    console.error(e);
-  } finally {
-    loading = false;
+    console.error('Market summary error:', e);
+    document.getElementById('spotlight-cards').innerHTML =
+      '<div class="ms-loading">Error loading market data: ' + e.message + '</div>';
   }
 }
 
-function showSpinner() {
-  ['tbody-d','tbody-c'].forEach(id=>{
-    document.getElementById(id).innerHTML=`<tr><td colspan="10"><div class="loading"><div class="spinner"></div>Querying Supabase…</div></td></tr>`;
-  });
-  document.getElementById('barchart').innerHTML=`<div class="loading"><div class="spinner"></div>Loading…</div>`;
+function renderSpotlight(){
+  if(!VOL_DATA.length) return;
+  const top = VOL_DATA[0];
+  document.getElementById('spotlight-cards').innerHTML = `
+    <div class="spotlight-grid">
+      <div class="sp-card buy" onclick="openDetail('${top.symbol}')">
+        <div class="sp-label">Top buyer — ${top.symbol}</div>
+        <div class="sp-sym buy">Broker ${top.top_buyer}</div>
+        <div class="sp-name">${top.top_buyer_name||'—'}</div>
+        <div class="sp-qty">Bought ${fmt(top.top_buyer_qty)} shares</div>
+      </div>
+      <div class="sp-card sell" onclick="openDetail('${top.symbol}')">
+        <div class="sp-label">Top seller — ${top.symbol}</div>
+        <div class="sp-sym sell">Broker ${top.top_seller}</div>
+        <div class="sp-name">${top.top_seller_name||'—'}</div>
+        <div class="sp-qty">Sold ${fmt(top.top_seller_qty)} shares</div>
+      </div>
+      <div class="sp-card hold" onclick="openDetail('${top.symbol}')">
+        <div class="sp-label">Top holder — ${top.symbol}</div>
+        <div class="sp-sym hold">Broker ${top.top_holder}</div>
+        <div class="sp-name">${top.top_holder_name||'—'}</div>
+        <div class="sp-qty">Holds ${fmt(top.top_holder_qty)} shares</div>
+      </div>
+      <div class="sp-card rate" onclick="openDetail('${top.symbol}')">
+        <div class="sp-label">Avg rate of top holder</div>
+        <div class="sp-sym rate">Rs ${fmtf(top.avg_rate)}</div>
+        <div class="sp-name">Cost per share held</div>
+        <div class="sp-qty">Highest traded: ${top.symbol}</div>
+      </div>
+    </div>`;
 }
 
-function resetFilters() {
-  document.getElementById('f-sym').value='';
+function doSortVol(arr,col,asc){
+  return [...arr].sort((a,b)=>{
+    let va=a[col],vb=b[col];
+    if(typeof va==='number') return asc?va-vb:vb-va;
+    return asc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
+  });
+}
+function sortVol(col){
+  if(volCol===col) volAsc=!volAsc; else {volCol=col;volAsc=false;}
+  renderVolTable();
+}
+
+function renderVolTable(){
+  const data = doSortVol(VOL_DATA, volCol, volAsc);
+  const maxV = data.length ? data[0].volume : 1;
+  document.getElementById('vol-cnt').textContent = data.length + ' symbols';
+  const tb = document.getElementById('vol-tbody');
+  if(!data.length){tb.innerHTML='<tr><td colspan="10"><div class="empty">No data.</div></td></tr>';return;}
+  tb.innerHTML = data.map((r,i)=>{
+    const pct = Math.max(2, r.volume/maxV*80);
+    return `<tr onclick="openDetail('${r.symbol}')">
+      <td>${rankBadge(i+1)}</td>
+      <td class="sym">${r.symbol}</td>
+      <td class="bname">${r.security_name}</td>
+      <td><div class="vol-wrap"><div class="vol-track"><div class="vol-bar" style="width:${pct}px"></div></div><span class="m">${fmt(r.volume)}</span></div></td>
+      <td class="pos">${fmt(r.buy_qty)}</td>
+      <td class="neg">${fmt(r.total_sale_qty)}</td>
+      <td><span class="brk">${r.top_buyer}</span></td>
+      <td><span class="brk sell">${r.top_seller}</span></td>
+      <td><span class="brk hold">${r.top_holder}</span></td>
+      <td class="m" style="color:var(--amber)">Rs ${fmtf(r.avg_rate)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── SCRIPT DETAIL ──────────────────────────────────────────────────────────
+async function openDetail(sym){
+  const panel = document.getElementById('detail-panel');
+  document.getElementById('dp-sym').textContent  = sym;
+  document.getElementById('dp-sym2').textContent = sym;
+  panel.classList.add('open');
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+  document.getElementById('dp-tbody').innerHTML = '<tr><td colspan="9"><div class="empty"><div class="spinner" style="margin:0 auto 8px"></div>Loading…</div></td></tr>';
+
+  try {
+    // Fetch all historical holdings for this symbol
+    let allRows=[], offset=0, limit=1000;
+    while(true){
+      const {data,error} = await sb.from('holdings').select('*').eq('symbol',sym).range(offset,offset+limit-1);
+      if(error) throw error;
+      allRows.push(...(data||[]));
+      if(!data||data.length<limit) break;
+      offset+=limit;
+    }
+
+    // Fetch cumulative top holder
+    const {data:cData} = await sb.from('cumulative').select('broker,broker_name,net_holding,avg_rate')
+      .eq('symbol',sym).order('net_holding',{ascending:false}).limit(1);
+    const topHolder = (cData&&cData[0])||{};
+
+    // Aggregate by date
+    const dateMap={};
+    for(const r of allRows){
+      const d=r.date;
+      if(!dateMap[d]) dateMap[d]={
+        date:d, buy_qty:0, total_sale_qty:0, volume:0,
+        buy_brokers:{}, sell_brokers:{}
+      };
+      const dm=dateMap[d];
+      dm.buy_qty         += (r.buy_qty||0);
+      dm.total_sale_qty  += (r.total_sale_qty||0);
+      dm.volume          += (r.buy_qty||0)+(r.total_sale_qty||0);
+      if(!dm.buy_brokers[r.broker])  dm.buy_brokers[r.broker]  ={broker:r.broker,name:r.broker_name||'',qty:0};
+      if(!dm.sell_brokers[r.broker]) dm.sell_brokers[r.broker] ={broker:r.broker,name:r.broker_name||'',qty:0};
+      dm.buy_brokers[r.broker].qty  += (r.buy_qty||0);
+      dm.sell_brokers[r.broker].qty += (r.total_sale_qty||0);
+    }
+
+    // Sort dates and assign daily ranks by volume
+    DETAIL_DATA = Object.values(dateMap).map(dm=>{
+      const tb = Object.values(dm.buy_brokers).sort((a,b)=>b.qty-a.qty)[0]||{};
+      const ts = Object.values(dm.sell_brokers).sort((a,b)=>b.qty-a.qty)[0]||{};
+      return {
+        date            : dm.date,
+        volume          : dm.volume,
+        buy_qty         : dm.buy_qty,
+        total_sale_qty  : dm.total_sale_qty,
+        top_buyer       : tb.broker||'—',
+        top_buyer_name  : tb.name||'',
+        top_seller      : ts.broker||'—',
+        top_seller_name : ts.name||'',
+        top_holder      : topHolder.broker||'—',
+        top_holder_name : topHolder.broker_name||'',
+        avg_rate        : topHolder.avg_rate||0,
+      };
+    }).sort((a,b)=>b.volume-a.volume);
+
+    // Assign ranks
+    const volRanked = [...DETAIL_DATA].sort((a,b)=>b.volume-a.volume);
+    const rankMap={};
+    volRanked.forEach((r,i)=>rankMap[r.date]=i+1);
+    DETAIL_DATA.forEach(r=>r.rank=rankMap[r.date]);
+
+    // Summary stats
+    const totalVol = DETAIL_DATA.reduce((s,r)=>s+r.volume,0);
+    const totalBuy = DETAIL_DATA.reduce((s,r)=>s+r.buy_qty,0);
+    const totalSell= DETAIL_DATA.reduce((s,r)=>s+r.total_sale_qty,0);
+    document.getElementById('dp-stats').innerHTML = `
+      <div class="dp-stat"><div class="dp-stat-label">Trading Days</div><div class="dp-stat-val c">${DETAIL_DATA.length}</div></div>
+      <div class="dp-stat"><div class="dp-stat-label">Total Volume</div><div class="dp-stat-val c">${fmt(totalVol)}</div></div>
+      <div class="dp-stat"><div class="dp-stat-label">Total Bought</div><div class="dp-stat-val g">${fmt(totalBuy)}</div></div>
+      <div class="dp-stat"><div class="dp-stat-label">Total Sold</div><div class="dp-stat-val r">${fmt(totalSell)}</div></div>
+      <div class="dp-stat"><div class="dp-stat-label">Top Holder</div><div class="dp-stat-val g">Broker ${topHolder.broker||'—'}</div></div>
+      <div class="dp-stat"><div class="dp-stat-label">Avg Rate</div><div class="dp-stat-val a">Rs ${fmtf(topHolder.avg_rate||0)}</div></div>`;
+
+    document.getElementById('dp-cnt').textContent = DETAIL_DATA.length + ' trading days';
+    renderDetailTable();
+
+  } catch(e) {
+    document.getElementById('dp-tbody').innerHTML =
+      '<tr><td colspan="9"><div class="empty">Error: '+e.message+'</div></td></tr>';
+  }
+}
+
+function sortDetail(col){
+  if(detCol===col) detAsc=!detAsc; else {detCol=col;detAsc=false;}
+  renderDetailTable();
+}
+
+function renderDetailTable(){
+  const data = doSortVol(DETAIL_DATA, detCol, detAsc);
+  document.getElementById('dp-tbody').innerHTML = data.map(r=>
+    `<tr>
+      <td class="m">${r.date}</td>
+      <td>${rankBadge(r.rank)}</td>
+      <td class="m">${fmt(r.volume)}</td>
+      <td class="pos">${fmt(r.buy_qty)}</td>
+      <td class="neg">${fmt(r.total_sale_qty)}</td>
+      <td><span class="brk">${r.top_buyer}</span></td>
+      <td><span class="brk sell">${r.top_seller}</span></td>
+      <td><span class="brk hold">${r.top_holder}</span></td>
+      <td class="m" style="color:var(--amber)">Rs ${fmtf(r.avg_rate)}</td>
+    </tr>`).join('');
+}
+
+function closeDetail(){
+  document.getElementById('detail-panel').classList.remove('open');
+}
+
+// ── WEEKLY TOP 10 ──────────────────────────────────────────────────────────
+async function loadWeekly(){
+  const days = getLast5TradingDays();
+  try {
+    let allRows=[], offset=0, limit=1000;
+    while(true){
+      const {data,error} = await sb.from('holdings').select('symbol,buy_qty,total_sale_qty')
+        .in('date', days).range(offset, offset+limit-1);
+      if(error) throw error;
+      allRows.push(...(data||[]));
+      if(!data||data.length<limit) break;
+      offset+=limit;
+    }
+
+    const symVol={};
+    for(const r of allRows){
+      if(!symVol[r.symbol]) symVol[r.symbol]=0;
+      symVol[r.symbol] += (r.buy_qty||0)+(r.total_sale_qty||0);
+    }
+
+    const top10 = Object.entries(symVol)
+      .sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+    if(!top10.length){
+      document.getElementById('weekly-bars').innerHTML='<div class="empty">No weekly data available.</div>';
+      return;
+    }
+
+    const maxV = top10[0][1];
+    const medals=['🥇','🥈','🥉'];
+    document.getElementById('weekly-bars').innerHTML = top10.map(([sym,vol],i)=>{
+      const pct = Math.max(2, vol/maxV*100);
+      return `<div class="wrow">
+        <div class="wrank">${medals[i]||'#'+(i+1)}</div>
+        <div class="wsym" onclick="openDetail('${sym}')">${sym}</div>
+        <div class="wtrack"><div class="wfill" style="width:${pct}%">${fmt(vol)}</div></div>
+      </div>`;
+    }).join('');
+
+  } catch(e) {
+    document.getElementById('weekly-bars').innerHTML='<div class="empty">Error loading weekly data: '+e.message+'</div>';
+  }
+}
+
+// ── HOLDINGS FILTER & TABS ────────────────────────────────────────────────
+function setStatus(msg,isError=false){
+  const el=document.getElementById('status');
+  el.innerHTML=msg;
+  el.style.color=isError?'var(--red)':'var(--muted)';
+  el.style.borderColor=isError?'var(--red)':'var(--border)';
+}
+
+async function applyFilters(){
+  if(loading) return;
+  const sym=document.getElementById('f-sym').value.trim();
+  if(!sym){setStatus('⚠ Please select a stock symbol.',true);return;}
+  const brk  =document.getElementById('f-brk').value.trim();
+  const bname=document.getElementById('f-bname').value.trim().toLowerCase();
+  const dfrom=document.getElementById('f-dfrom').value;
+  const dto  =document.getElementById('f-dto').value;
+  const minq =parseFloat(document.getElementById('f-minq').value)||null;
+  const side =document.getElementById('f-side').value;
+  loading=true;
+  setStatus('Loading <b>'+sym+'</b>…');
+  try{
+    let dq=sb.from('holdings').select('*').eq('symbol',sym).order('date',{ascending:false}).order('holding_qty',{ascending:false});
+    if(brk)   dq=dq.eq('broker',parseInt(brk));
+    if(dfrom) dq=dq.gte('date',dfrom);
+    if(dto)   dq=dq.lte('date',dto);
+    if(side==='pos') dq=dq.gt('holding_qty',0);
+    if(side==='neg') dq=dq.lt('holding_qty',0);
+    dq=dq.limit(5000);
+    const {data:ddata,error:derr}=await dq;
+    if(derr) throw derr;
+    let cq=sb.from('cumulative').select('*').eq('symbol',sym).order('net_holding',{ascending:false});
+    if(brk)   cq=cq.eq('broker',parseInt(brk));
+    if(bname) cq=cq.ilike('broker_name','%'+bname+'%');
+    const {data:cdata,error:cerr}=await cq;
+    if(cerr) throw cerr;
+    DAILY=(ddata||[]).filter(r=>!bname||(r.broker_name||'').toLowerCase().includes(bname));
+    CUMUL=cdata||[];
+    FD=[...DAILY];FC=[...CUMUL];
+    const net=DAILY.reduce((s,r)=>s+(r.holding_qty||0),0);
+    const top=CUMUL.length?CUMUL[0]:null;
+    document.getElementById('s-pos').textContent=DAILY.length.toLocaleString();
+    document.getElementById('s-brk').textContent=new Set(DAILY.map(r=>r.broker)).size;
+    document.getElementById('s-net').textContent=Math.round(net).toLocaleString();
+    document.getElementById('s-top').textContent=top?top.broker:'—';
+    document.getElementById('s-top-name').textContent=top?(top.broker_name||''):'by net holding';
+    pg.d=1;pg.c=1;
+    renderD();renderC();renderChart(sym);
+    setStatus('<b>'+DAILY.length.toLocaleString()+'</b> daily · <b>'+CUMUL.length+'</b> cumulative for <b>'+sym+'</b>');
+  }catch(e){setStatus('Error: '+e.message,true);}
+  finally{loading=false;}
+}
+
+function resetFilters(){
+  ['f-sym','f-side'].forEach(id=>document.getElementById(id).value='');
   ['f-brk','f-bname','f-minq'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-dfrom').value='';
   document.getElementById('f-dto').value='';
-  document.getElementById('f-side').value='all';
-  DAILY=[]; CUMUL=[]; FD=[]; FC=[];
-  ['tbody-d','tbody-c'].forEach(id=>{
-    document.getElementById(id).innerHTML=`<tr><td colspan="10"><div class="empty">Enter a symbol and click Search.</div></td></tr>`;
-  });
-  document.getElementById('barchart').innerHTML=`<div class="empty">Enter a symbol and click Search.</div>`;
+  DAILY=[];CUMUL=[];FD=[];FC=[];pg.d=1;pg.c=1;
+  ['tbody-d','tbody-c'].forEach(id=>{document.getElementById(id).innerHTML='<tr><td colspan="10"><div class="empty">Select a symbol and click Search.</div></td></tr>';});
+  document.getElementById('barchart').innerHTML='<div class="empty">Select a symbol and click Search.</div>';
   ['s-pos','s-brk','s-net','s-top'].forEach(id=>document.getElementById(id).textContent='—');
-  setStatus('Enter a stock symbol above and click Search to load data.');
+  setStatus('Select a stock symbol above and click Search.');
 }
 
-function doSort(arr,col,asc) {
+function doSort(arr,col,asc){
   return [...arr].sort((a,b)=>{
-    let va=a[col], vb=b[col];
+    let va=a[col],vb=b[col];
     if(typeof va==='number') return asc?va-vb:vb-va;
     return asc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
   });
 }
 function srtD(c){if(dCol===c)dAsc=!dAsc;else{dCol=c;dAsc=false;}pg.d=1;renderD();}
-function srtC(c){if(cCol===c)cAsc=!cAsc;else{cCol=c;cAsc=false;}pg.c=1;renderC();}
-const fmt=n=>Number(n||0).toLocaleString();
-const fmtf=n=>Number(n||0).toFixed(2);
+function csrt(c){if(cCol===c)cAsc=!cAsc;else{cCol=c;cAsc=false;}pg.c=1;renderC();}
 
-function renderD() {
+function renderD(){
   const data=doSort(FD,dCol,dAsc);
   const tot=data.length,pages=Math.max(1,Math.ceil(tot/PS));
   pg.d=Math.min(pg.d,pages);
   const sl=data.slice((pg.d-1)*PS,pg.d*PS);
   const maxQ=Math.max(...FD.map(r=>Math.abs(r.holding_qty||0)),1);
-  document.getElementById('cnt-d').textContent=`${tot.toLocaleString()} rows`;
-  document.getElementById('pi-d').textContent=`Page ${pg.d} of ${pages}`;
+  document.getElementById('cnt-d').textContent=tot.toLocaleString()+' rows';
+  document.getElementById('pi-d').textContent='Page '+pg.d+' of '+pages;
   document.getElementById('pp-d').disabled=pg.d<=1;
   document.getElementById('pn-d').disabled=pg.d>=pages;
   const tb=document.getElementById('tbody-d');
-  if(!sl.length){tb.innerHTML=`<tr><td colspan="10"><div class="empty">No results.</div></td></tr>`;return;}
+  if(!sl.length){tb.innerHTML='<tr><td colspan="10"><div class="empty">No data matches filters.</div></td></tr>';return;}
   tb.innerHTML=sl.map(r=>{
     const hq=r.holding_qty||0,pct=Math.min(100,Math.abs(hq)/maxQ*100);
     const cls=hq>=0?'pos':'neg',fc=hq>=0?'p':'n';
-    return`<tr>
-      <td class="m">${r.date}</td>
-      <td class="sym">${r.symbol}</td>
-      <td><span class="brk">${r.broker}</span></td>
-      <td class="bname">${r.broker_name||'—'}</td>
-      <td class="m">${fmt(r.buy_qty)}</td>
-      <td class="m">${fmt(r.total_sale_qty)}</td>
-      <td><span class="ipo">${fmt(r.ipo_sale_qty)}</span></td>
-      <td class="m">${fmt(r.bulk_sale_qty)}</td>
-      <td><div class="qcell"><span class="${cls}">${fmt(hq)}</span>
-        <div class="qbar"><div class="qfill ${fc}" style="width:${pct}%"></div></div></div></td>
-      <td class="m" style="color:var(--amber)">${fmtf(r.avg_rate)}</td>
-    </tr>`;
+    return '<tr><td class="m">'+r.date+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m">'+fmt(r.buy_qty)+'</td><td class="m">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.ipo_sale_qty)+'</span></td><td class="m">'+fmt(r.bulk_sale_qty)+'</td><td><div class="qcell"><span class="'+cls+'">'+fmt(hq)+'</span><div class="qbar"><div class="qfill '+fc+'" style="width:'+pct+'%"></div></div></div></td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
   }).join('');
 }
 
-function renderC() {
+function renderC(){
   const data=doSort(FC,cCol,cAsc);
   const tot=data.length,pages=Math.max(1,Math.ceil(tot/PS));
   pg.c=Math.min(pg.c,pages);
   const sl=data.slice((pg.c-1)*PS,pg.c*PS);
   const off=(pg.c-1)*PS;
-  document.getElementById('cnt-c').textContent=`${tot.toLocaleString()} rows`;
-  document.getElementById('pi-c').textContent=`Page ${pg.c} of ${pages}`;
+  document.getElementById('cnt-c').textContent=tot.toLocaleString()+' rows';
+  document.getElementById('pi-c').textContent='Page '+pg.c+' of '+pages;
   document.getElementById('pp-c').disabled=pg.c<=1;
   document.getElementById('pn-c').disabled=pg.c>=pages;
   const tb=document.getElementById('tbody-c');
-  if(!sl.length){tb.innerHTML=`<tr><td colspan="10"><div class="empty">No results.</div></td></tr>`;return;}
+  if(!sl.length){tb.innerHTML='<tr><td colspan="10"><div class="empty">No data.</div></td></tr>';return;}
   const medals=['🥇','🥈','🥉'];
   tb.innerHTML=sl.map((r,i)=>{
-    const rank=off+i+1,medal=medals[rank-1]||`#${rank}`;
+    const rank=off+i+1,medal=medals[rank-1]||'#'+rank;
     const nh=r.net_holding||0,cls=nh>=0?'pos':'neg';
-    return`<tr>
-      <td class="m" style="color:var(--muted)">${medal}</td>
-      <td class="sym">${r.symbol}</td>
-      <td><span class="brk">${r.broker}</span></td>
-      <td class="bname">${r.broker_name||'—'}</td>
-      <td class="m">${fmt(r.total_buy_qty)}</td>
-      <td class="m">${fmt(r.total_sale_qty)}</td>
-      <td><span class="ipo">${fmt(r.total_ipo_qty)}</span></td>
-      <td class="m">${fmt(r.total_bulk_qty)}</td>
-      <td class="${cls}">${fmt(nh)}</td>
-      <td class="m" style="color:var(--amber)">${fmtf(r.avg_rate)}</td>
-    </tr>`;
+    return '<tr><td class="m" style="color:var(--muted)">'+medal+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m">'+fmt(r.total_buy_qty)+'</td><td class="m">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.total_ipo_qty)+'</span></td><td class="m">'+fmt(r.total_bulk_qty)+'</td><td class="'+cls+'">'+fmt(nh)+'</td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
   }).join('');
 }
 
-function renderChart(sym) {
+function renderChart(sym){
   const rows=FC.slice(0,10);
   const title=document.getElementById('chart-title');
   const chart=document.getElementById('barchart');
-  if(!rows.length){chart.innerHTML=`<div class="empty">No data.</div>`;return;}
-  title.textContent=`Top Brokers — ${sym} (Cumulative Net Holdings)`;
+  if(!rows.length){chart.innerHTML='<div class="empty">No data.</div>';return;}
+  title.textContent='Top Brokers — '+sym+' (Cumulative Net Holdings)';
   const maxV=Math.max(rows[0].net_holding,1);
   const medals=['🥇','🥈','🥉'];
   chart.innerHTML=rows.map((r,i)=>{
     const pct=Math.max(1,r.net_holding/maxV*100);
-    return`<div class="brow">
-      <div class="brank">${medals[i]||'#'+(i+1)}</div>
-      <div class="binfo"><div class="bn">Broker ${r.broker}</div><div class="bnn">${r.broker_name||'—'}</div></div>
-      <div class="btrack"><div class="bfill" style="width:${pct}%">${fmt(r.net_holding)}</div></div>
-    </div>`;
+    return '<div class="brow"><div class="brank">'+(medals[i]||'#'+(i+1))+'</div><div class="binfo"><div class="bn">Broker '+r.broker+'</div><div class="bnn">'+(r.broker_name||'—')+'</div></div><div class="btrack"><div class="bfill" style="width:'+pct+'%">'+fmt(r.net_holding)+'</div></div></div>';
   }).join('');
 }
 
 function showTab(name){
-  ['daily','cumul','topb'].forEach(t=>{document.getElementById(`tab-${t}`).style.display=t===name?'':'none';});
+  ['daily','cumul','topb'].forEach(t=>{document.getElementById('tab-'+t).style.display=t===name?'':'none';});
   document.querySelectorAll('.tab').forEach((el,i)=>{el.classList.toggle('active',['daily','cumul','topb'][i]===name);});
-  if(name==='topb') renderChart(document.getElementById('f-sym').value.toUpperCase());
+  if(name==='topb') renderChart(document.getElementById('f-sym').value);
 }
 function chpg(dir,t){pg[t]+=dir;if(t==='d')renderD();else renderC();window.scrollTo({top:0,behavior:'smooth'});}
 
-// Load all symbols into dropdown on page load
-async function loadSymbols() {
-  try {
-    // Fetch all rows from cumulative, get unique symbols
-    let allSymbols = [];
-    let offset = 0;
-    const limit = 1000;
-    while(true) {
-      const url = SUPABASE_URL + '/rest/v1/cumulative?select=symbol&order=symbol.asc&limit=' + limit + '&offset=' + offset;
-      const r = await fetch(url, {
-        headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-            'Accept': 'application/json'
-        }
-      });
-      if(!r.ok) {
-        const err = await r.text();
-        console.error('Symbol load error:', r.status, err);
-        setStatus('Could not load symbols: ' + r.status, true);
-        return;
-      }
-      const data = await r.json();
+// ── INIT ──────────────────────────────────────────────────────────────────
+async function init(){
+  // Load symbols for dropdown
+  try{
+    let allSymbols=[],offset=0,limit=1000;
+    while(true){
+      const r=await fetch(SUPABASE_URL+'/rest/v1/cumulative?select=symbol&order=symbol.asc&limit='+limit+'&offset='+offset,
+        {headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Accept':'application/json'}});
+      if(!r.ok) break;
+      const data=await r.json();
       if(!data.length) break;
-      allSymbols.push(...data.map(d => d.symbol));
-      if(data.length < limit) break;
-      offset += limit;
+      allSymbols.push(...data.map(d=>d.symbol));
+      if(data.length<limit) break;
+      offset+=limit;
     }
-    const symbols = [...new Set(allSymbols)].sort();
-    const sel = document.getElementById('f-sym');
-    // Clear existing options except first
-    while(sel.options.length > 1) sel.remove(1);
-    symbols.forEach(s => { sel.add(new Option(s, s)); });
-    setStatus(`${symbols.length} symbols loaded — select one and click Search.`);
-    console.log('Symbols loaded:', symbols.length);
-  } catch(e) {
-    console.error('loadSymbols error:', e);
-    setStatus('Could not load symbol list: ' + e.message, true);
-  }
+    const symbols=[...new Set(allSymbols)].sort();
+    const sel=document.getElementById('f-sym');
+    while(sel.options.length>1) sel.remove(1);
+    symbols.forEach(s=>{sel.add(new Option(s,s));});
+  }catch(e){console.error('Symbol load error:',e);}
+
+  // Load market summary automatically
+  await loadMarketSummary();
 }
-loadSymbols();
+
+init();
 </script>
 </body>
 </html>
