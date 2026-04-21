@@ -369,7 +369,7 @@ def main():
 
 
 def write_html():
-    """Dashboard with Market Summary at top, then existing tabs below."""
+    """Dashboard with 4 tabs — Market Summary as Tab 4."""
 
     SUPABASE_URL      = os.environ.get("SUPABASE_URL", "YOUR_SUPABASE_URL").rstrip("/")
     SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "YOUR_SUPABASE_ANON_KEY")
@@ -395,91 +395,6 @@ header{{padding:16px 0;border-bottom:1px solid var(--border);position:sticky;top
 .brand p{{font-size:11px;color:var(--muted);margin-top:2px}}
 .hdr-meta{{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right;line-height:1.9}}
 .hdr-meta b{{color:var(--cyan)}}
-
-/* MARKET SUMMARY */
-.ms-section{{margin:20px 0 28px}}
-.ms-header{{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}}
-.ms-title{{font-family:var(--mono);font-size:13px;color:var(--cyan);letter-spacing:1px}}
-.ms-date{{font-family:var(--mono);font-size:11px;color:var(--muted)}}
-.ms-loading{{text-align:center;padding:40px;color:var(--muted);font-size:13px}}
-.spinner{{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px}}
-@keyframes spin{{to{{transform:rotate(360deg)}}}}
-
-/* SPOTLIGHT CARDS */
-.spotlight-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px}}
-.sp-card{{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:16px;position:relative;overflow:hidden;cursor:pointer;transition:border-color .2s,transform .2s}}
-.sp-card:hover{{border-color:var(--border2);transform:translateY(-2px)}}
-.sp-card::after{{content:'';position:absolute;bottom:0;left:0;right:0;height:2px}}
-.sp-card.buy::after{{background:var(--cyan)}}
-.sp-card.sell::after{{background:var(--red)}}
-.sp-card.hold::after{{background:var(--green)}}
-.sp-card.rate::after{{background:var(--amber)}}
-.sp-label{{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px}}
-.sp-sym{{font-family:var(--mono);font-size:22px;font-weight:700;margin-bottom:2px}}
-.sp-sym.buy{{color:var(--cyan)}}
-.sp-sym.sell{{color:var(--red)}}
-.sp-sym.hold{{color:var(--green)}}
-.sp-sym.rate{{color:var(--amber)}}
-.sp-name{{font-size:11px;color:var(--muted);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
-.sp-qty{{font-size:13px;color:var(--text);font-family:var(--mono)}}
-
-/* VOLUME TABLE */
-.vtw{{background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px}}
-.vtw-header{{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}}
-.vtw-title{{font-size:13px;font-weight:600}}
-.vtcnt{{font-family:var(--mono);font-size:11px;color:var(--muted)}}
-.tscroll{{overflow-x:auto}}
-table{{width:100%;border-collapse:collapse}}
-thead th{{padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);text-align:left;background:var(--s2);cursor:pointer;user-select:none;white-space:nowrap;border-bottom:1px solid var(--border)}}
-thead th:hover{{color:var(--cyan)}}
-tbody tr{{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer}}
-tbody tr:last-child{{border-bottom:none}}
-tbody tr:hover{{background:var(--s2)}}
-td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
-.m{{font-family:var(--mono);font-size:12px}}
-.sym{{font-family:var(--mono);font-weight:700;color:var(--cyan)}}
-.pos{{color:var(--green);font-family:var(--mono)}}
-.neg{{color:var(--red);font-family:var(--mono)}}
-.brk{{display:inline-block;background:rgba(0,200,255,.08);border:1px solid rgba(0,200,255,.2);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:11px;color:var(--cyan)}}
-.brk.sell{{background:rgba(255,77,106,.08);border-color:rgba(255,77,106,.2);color:var(--red)}}
-.brk.hold{{background:rgba(0,229,160,.08);border-color:rgba(0,229,160,.2);color:var(--green)}}
-.rank-badge{{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-family:var(--mono);font-size:11px;font-weight:600}}
-.rank-1{{background:rgba(255,184,48,.15);color:var(--amber);border:1px solid rgba(255,184,48,.3)}}
-.rank-2{{background:rgba(180,178,169,.1);color:#b4b2a9;border:1px solid rgba(180,178,169,.2)}}
-.rank-3{{background:rgba(240,153,123,.1);color:#f0997b;border:1px solid rgba(240,153,123,.2)}}
-.rank-n{{background:var(--s2);color:var(--muted);border:1px solid var(--border)}}
-.vol-wrap{{display:flex;align-items:center;gap:8px;min-width:120px}}
-.vol-bar{{height:4px;border-radius:2px;background:linear-gradient(90deg,var(--cyan2),var(--cyan))}}
-.vol-track{{flex:1;height:4px;background:var(--muted2);border-radius:2px;max-width:60px}}
-
-/* SCRIPT DETAIL PANEL */
-.detail-panel{{background:var(--s1);border:1px solid var(--cyan);border-radius:10px;padding:20px;margin-bottom:20px;display:none}}
-.detail-panel.open{{display:block}}
-.dp-header{{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px}}
-.dp-sym{{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--cyan)}}
-.dp-close{{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 12px;border-radius:5px;font-size:12px;cursor:pointer}}
-.dp-close:hover{{border-color:var(--red);color:var(--red)}}
-.dp-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}}
-.dp-stat{{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:12px}}
-.dp-stat-label{{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px}}
-.dp-stat-val{{font-family:var(--mono);font-size:18px;font-weight:600}}
-.dp-stat-val.c{{color:var(--cyan)}}
-.dp-stat-val.g{{color:var(--green)}}
-.dp-stat-val.r{{color:var(--red)}}
-.dp-stat-val.a{{color:var(--amber)}}
-
-/* WEEKLY CHART */
-.weekly-section{{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:20px}}
-.weekly-title{{font-size:13px;font-weight:600;margin-bottom:16px;color:var(--text)}}
-.weekly-bars{{display:flex;flex-direction:column;gap:10px}}
-.wrow{{display:flex;align-items:center;gap:10px}}
-.wrank{{font-family:var(--mono);font-size:11px;color:var(--muted);width:20px;text-align:right;flex-shrink:0}}
-.wsym{{font-family:var(--mono);font-size:12px;color:var(--cyan);width:70px;flex-shrink:0;cursor:pointer}}
-.wsym:hover{{text-decoration:underline}}
-.wtrack{{flex:1;height:22px;background:var(--s2);border-radius:4px;overflow:hidden;border:1px solid var(--border)}}
-.wfill{{height:100%;background:linear-gradient(90deg,var(--cyan2),var(--cyan));display:flex;align-items:center;padding-left:8px;font-family:var(--mono);font-size:11px;color:#fff;min-width:2px;transition:width .6s ease}}
-
-/* FILTER SECTION */
 .stats{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:20px 0}}
 .sc{{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s}}
 .sc:hover{{border-color:var(--border2);transform:translateY(-2px)}}
@@ -499,7 +414,7 @@ select option{{background:var(--s2)}}
 .btn-g{{background:transparent;border:1px solid var(--border);color:var(--muted)}}
 .btn-g:hover{{border-color:var(--cyan);color:var(--cyan)}}
 .btns{{display:flex;gap:8px;align-items:flex-end}}
-.tabs{{display:flex;gap:2px;margin-bottom:14px;border-bottom:1px solid var(--border)}}
+.tabs{{display:flex;gap:2px;margin-bottom:14px;border-bottom:1px solid var(--border);flex-wrap:wrap}}
 .tab{{padding:9px 18px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s;user-select:none}}
 .tab:hover{{color:var(--text)}}
 .tab.active{{color:var(--cyan);border-bottom-color:var(--cyan)}}
@@ -507,6 +422,28 @@ select option{{background:var(--s2)}}
 .th2{{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}}
 .ttitle{{font-size:13px;font-weight:600}}
 .tcnt{{font-family:var(--mono);font-size:11px;color:var(--muted)}}
+.tscroll{{overflow-x:auto}}
+table{{width:100%;border-collapse:collapse}}
+thead th{{padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);text-align:left;background:var(--s2);cursor:pointer;user-select:none;white-space:nowrap;border-bottom:1px solid var(--border)}}
+thead th:hover{{color:var(--cyan)}}
+tbody tr{{border-bottom:1px solid var(--border);transition:background .1s}}
+tbody tr:last-child{{border-bottom:none}}
+tbody tr:hover{{background:var(--s2)}}
+td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
+.m{{font-family:var(--mono);font-size:12px}}
+.sym{{font-family:var(--mono);font-weight:700;color:var(--cyan)}}
+.pos{{color:var(--green);font-family:var(--mono)}}
+.neg{{color:var(--red);font-family:var(--mono)}}
+.brk{{display:inline-block;background:rgba(0,200,255,.08);border:1px solid rgba(0,200,255,.2);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:11px;color:var(--cyan)}}
+.brk.sell{{background:rgba(255,77,106,.08);border-color:rgba(255,77,106,.2);color:var(--red)}}
+.brk.hold{{background:rgba(0,229,160,.08);border-color:rgba(0,229,160,.2);color:var(--green)}}
+.ipo{{display:inline-block;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:11px;color:var(--purple)}}
+.bname{{font-size:10px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis}}
+.qcell{{display:flex;align-items:center;gap:6px}}
+.qbar{{flex:1;height:3px;background:var(--muted2);border-radius:2px;min-width:30px;max-width:70px}}
+.qfill{{height:100%;border-radius:2px}}
+.qfill.p{{background:linear-gradient(90deg,var(--cyan),var(--green))}}
+.qfill.n{{background:linear-gradient(90deg,var(--red),#f97316)}}
 .pag{{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);flex-wrap:wrap;gap:8px}}
 .pbtns{{display:flex;gap:6px}}
 .pb{{padding:4px 11px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:12px;cursor:pointer;transition:all .2s}}
@@ -522,16 +459,56 @@ select option{{background:var(--s2)}}
 .binfo .bnn{{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .btrack{{flex:1;height:24px;background:var(--s2);border-radius:5px;overflow:hidden;border:1px solid var(--border)}}
 .bfill{{height:100%;background:linear-gradient(90deg,var(--cyan2),var(--cyan));display:flex;align-items:center;padding-left:8px;font-family:var(--mono);font-size:11px;color:#fff;transition:width .6s ease;min-width:2px}}
-.ipo{{display:inline-block;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:11px;color:var(--purple)}}
-.bname{{font-size:11px;color:var(--muted);max-width:130px;overflow:hidden;text-overflow:ellipsis}}
-.qcell{{display:flex;align-items:center;gap:6px}}
-.qbar{{flex:1;height:3px;background:var(--muted2);border-radius:2px;min-width:30px;max-width:70px}}
-.qfill{{height:100%;border-radius:2px}}
-.qfill.p{{background:linear-gradient(90deg,var(--cyan),var(--green))}}
-.qfill.n{{background:linear-gradient(90deg,var(--red),#f97316)}}
 .empty{{text-align:center;padding:40px;color:var(--muted)}}
 .status-bar{{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px}}
 .status-bar b{{color:var(--cyan)}}
+.spinner{{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px}}
+@keyframes spin{{to{{transform:rotate(360deg)}}}}
+/* MARKET SUMMARY TAB */
+.ms-section-title{{font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;margin-top:20px}}
+.spotlight-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px}}
+.sp-card{{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:16px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s}}
+.sp-card:hover{{border-color:var(--border2);transform:translateY(-2px)}}
+.sp-card::after{{content:'';position:absolute;bottom:0;left:0;right:0;height:2px}}
+.sp-card.buy::after{{background:var(--cyan)}}
+.sp-card.sell::after{{background:var(--red)}}
+.sp-card.hold::after{{background:var(--green)}}
+.sp-card.rate::after{{background:var(--amber)}}
+.sp-label{{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:6px}}
+.sp-broker{{font-family:var(--mono);font-size:20px;font-weight:700;margin-bottom:2px}}
+.sp-broker.buy{{color:var(--cyan)}}
+.sp-broker.sell{{color:var(--red)}}
+.sp-broker.hold{{color:var(--green)}}
+.sp-broker.rate{{color:var(--amber)}}
+.sp-name{{font-size:11px;color:var(--muted);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.sp-qty{{font-size:13px;color:var(--text);font-family:var(--mono)}}
+.rank-badge{{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-family:var(--mono);font-size:11px;font-weight:600}}
+.rk1{{background:rgba(255,184,48,.15);color:var(--amber);border:1px solid rgba(255,184,48,.3)}}
+.rk2{{background:rgba(180,178,169,.1);color:#b4b2a9;border:1px solid rgba(180,178,169,.2)}}
+.rk3{{background:rgba(240,153,123,.1);color:#f0997b;border:1px solid rgba(240,153,123,.2)}}
+.rkn{{background:var(--s2);color:var(--muted);border:1px solid var(--border)}}
+.vol-wrap{{display:flex;align-items:center;gap:8px;min-width:120px}}
+.vol-bar{{height:4px;border-radius:2px;background:var(--cyan)}}
+.vol-track{{flex:1;height:4px;background:var(--muted2);border-radius:2px;max-width:60px}}
+.dp-panel{{background:var(--s1);border:1px solid var(--cyan);border-radius:10px;padding:20px;margin-bottom:16px;display:none}}
+.dp-panel.open{{display:block}}
+.dp-header{{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}}
+.dp-sym{{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--cyan)}}
+.dp-close{{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 12px;border-radius:5px;font-size:12px;cursor:pointer}}
+.dp-close:hover{{border-color:var(--red);color:var(--red)}}
+.dp-stats-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}}
+.dp-stat{{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:12px}}
+.dp-stat-label{{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px}}
+.dp-stat-val{{font-family:var(--mono);font-size:18px;font-weight:600}}
+.weekly-bars{{display:flex;flex-direction:column;gap:10px}}
+.wrow{{display:flex;align-items:center;gap:10px}}
+.wrank{{font-family:var(--mono);font-size:11px;color:var(--muted);width:20px;text-align:right;flex-shrink:0}}
+.wsym{{font-family:var(--mono);font-size:12px;color:var(--cyan);width:70px;flex-shrink:0;cursor:pointer}}
+.wsym:hover{{text-decoration:underline}}
+.wtrack{{flex:1;height:22px;background:var(--s2);border-radius:4px;overflow:hidden;border:1px solid var(--border)}}
+.wfill{{height:100%;background:linear-gradient(90deg,var(--cyan2),var(--cyan));display:flex;align-items:center;padding-left:8px;font-family:var(--mono);font-size:11px;color:#fff;min-width:2px}}
+/* broker cell with name below */
+.brk-cell{{display:flex;flex-direction:column;gap:2px}}
 @media(max-width:768px){{.stats{{grid-template-columns:repeat(2,1fr)}}.fp{{flex-direction:column}}.fg{{min-width:100%}}.spotlight-grid{{grid-template-columns:repeat(2,1fr)}}}}
 </style>
 </head>
@@ -539,179 +516,171 @@ select option{{background:var(--s2)}}
 <header><div class="wrap"><div class="hdr">
   <div class="brand">
     <div class="brand-icon">📊</div>
-    <div><h1>NEPSE · HOLDINGS</h1><p>Live broker-level floorsheet dashboard · powered by Supabase</p></div>
+    <div><h1>NEPSE · HOLDINGS</h1><p>Live broker-level floorsheet dashboard</p></div>
   </div>
-  <div class="hdr-meta">Updated: <b id="gen-at">—</b><br>Today: <b id="today-date">—</b></div>
+  <div class="hdr-meta">Updated: <b id="gen-at">—</b><br>Today: <b id="today-lbl">—</b></div>
 </div></div></header>
 
 <div class="wrap" style="padding-top:20px;padding-bottom:40px">
 
-  <!-- ══ MARKET SUMMARY (always shown at top) ══ -->
-  <div class="ms-section">
-    <div class="ms-header">
-      <span class="ms-title">Market Summary</span>
-      <span class="ms-date" id="ms-date-label">Loading today's data…</span>
-    </div>
+  <!-- STAT CARDS -->
+  <div class="stats">
+    <div class="sc"><div class="sc-label">Positions</div><div class="sc-val" id="s-pos">—</div><div class="sc-sub">filtered results</div></div>
+    <div class="sc"><div class="sc-label">Brokers</div><div class="sc-val" id="s-brk">—</div><div class="sc-sub">active in view</div></div>
+    <div class="sc"><div class="sc-label">Net Holdings</div><div class="sc-val" id="s-net">—</div><div class="sc-sub">filtered total qty</div></div>
+    <div class="sc"><div class="sc-label">Top Broker</div><div class="sc-val" id="s-top">—</div><div class="sc-sub" id="s-top-name">by net holding</div></div>
+  </div>
 
-    <!-- Spotlight cards -->
-    <div id="spotlight-cards">
-      <div class="ms-loading"><div class="spinner"></div>Loading market data…</div>
+  <!-- FILTERS -->
+  <div class="fp">
+    <div class="fg"><label>Stock Symbol ★</label>
+      <select id="f-sym"><option value="">-- Select Symbol --</option></select></div>
+    <div class="fg"><label>Broker #</label><input type="text" id="f-brk" placeholder="e.g. 58"></div>
+    <div class="fg"><label>Broker Name</label><input type="text" id="f-bname" placeholder="e.g. Sunrise"></div>
+    <div class="fg"><label>Date From</label><input type="date" id="f-dfrom"></div>
+    <div class="fg"><label>Date To</label><input type="date" id="f-dto"></div>
+    <div class="fg"><label>Min Holding</label><input type="text" id="f-minq" placeholder="e.g. 500"></div>
+    <div class="fg"><label>Show</label>
+      <select id="f-side">
+        <option value="all">All positions</option>
+        <option value="pos">Positive only</option>
+        <option value="neg">Negative only</option>
+      </select></div>
+    <div class="btns">
+      <button class="btn btn-p" onclick="applyFilters()">Search</button>
+      <button class="btn btn-g" onclick="resetFilters()">Reset</button>
     </div>
+  </div>
 
-    <!-- Script detail panel (shown when row clicked) -->
-    <div class="detail-panel" id="detail-panel">
-      <div class="dp-header">
-        <span class="dp-sym" id="dp-sym">—</span>
-        <button class="dp-close" onclick="closeDetail()">✕ Close</button>
-      </div>
-      <div class="dp-grid" id="dp-stats"></div>
-      <div class="vtw">
-        <div class="th2">
-          <span class="ttitle">Daily breakdown — <span id="dp-sym2">—</span></span>
-          <span class="vtcnt" id="dp-cnt">—</span>
+  <div class="status-bar" id="status">Select a stock symbol above and click Search.</div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('daily')">Daily Holdings</div>
+    <div class="tab" onclick="showTab('cumul')">Cumulative</div>
+    <div class="tab" onclick="showTab('topb')">Top Brokers Chart</div>
+    <div class="tab" onclick="showTab('mkt')">Market Summary</div>
+  </div>
+
+  <!-- TAB 1: DAILY HOLDINGS -->
+  <div id="tab-daily">
+    <div class="tw">
+      <div class="th2"><span class="ttitle">Daily Holdings per Broker per Stock</span><span class="tcnt" id="cnt-d">—</span></div>
+      <div class="tscroll"><table>
+        <thead><tr>
+          <th onclick="srtD('date')">Date ↕</th><th onclick="srtD('symbol')">Symbol ↕</th>
+          <th onclick="srtD('broker')">Broker # ↕</th><th>Broker Name</th>
+          <th onclick="srtD('buy_qty')">Buy Qty ↕</th><th onclick="srtD('total_sale_qty')">Sale Qty ↕</th>
+          <th onclick="srtD('ipo_sale_qty')">IPO Sale ↕</th><th onclick="srtD('bulk_sale_qty')">Bulk Sale ↕</th>
+          <th onclick="srtD('holding_qty')">Net Holding ↕</th><th onclick="srtD('avg_rate')">Avg Rate ↕</th>
+        </tr></thead>
+        <tbody id="tbody-d"><tr><td colspan="10"><div class="empty">Select a symbol and click Search.</div></td></tr></tbody>
+      </table></div>
+      <div class="pag">
+        <span id="pi-d">—</span>
+        <div class="pbtns">
+          <button class="pb" id="pp-d" onclick="chpg(-1,'d')" disabled>← Prev</button>
+          <button class="pb" id="pn-d" onclick="chpg(1,'d')"  disabled>Next →</button>
         </div>
-        <div class="tscroll">
-          <table>
-            <thead><tr>
-              <th>Date</th>
-              <th>Rank</th>
-              <th onclick="sortDetail('volume')">Volume ↕</th>
-              <th onclick="sortDetail('buy_qty')">Buy Qty ↕</th>
-              <th onclick="sortDetail('total_sale_qty')">Sell Qty ↕</th>
-              <th>Top Buyer</th>
-              <th>Top Seller</th>
-              <th>Top Holder</th>
-              <th onclick="sortDetail('avg_rate')">Avg Rate ↕</th>
-            </tr></thead>
-            <tbody id="dp-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- High volume table -->
-    <div class="vtw" id="vol-table-wrap">
-      <div class="vtw-header">
-        <span class="vtw-title">Top scripts by volume today</span>
-        <span class="vtcnt" id="vol-cnt">—</span>
-      </div>
-      <div class="tscroll">
-        <table>
-          <thead><tr>
-            <th>#</th>
-            <th>Symbol</th>
-            <th>Security Name</th>
-            <th onclick="sortVol('volume')">Total Volume ↕</th>
-            <th onclick="sortVol('buy_qty')">Buy Vol ↕</th>
-            <th onclick="sortVol('total_sale_qty')">Sell Vol ↕</th>
-            <th>Top Buyer</th>
-            <th>Top Seller</th>
-            <th>Top Holder</th>
-            <th onclick="sortVol('avg_rate')">Avg Rate ↕</th>
-          </tr></thead>
-          <tbody id="vol-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Weekly top 10 -->
-    <div class="weekly-section">
-      <div class="weekly-title">Top 10 scripts by volume — last 5 trading days</div>
-      <div class="weekly-bars" id="weekly-bars">
-        <div class="ms-loading"><div class="spinner"></div>Loading weekly data…</div>
       </div>
     </div>
   </div>
 
-  <!-- ══ HOLDINGS FILTERS + TABS ══ -->
-  <div style="border-top:1px solid var(--border);padding-top:20px;margin-top:4px">
-
-    <div class="stats">
-      <div class="sc"><div class="sc-label">Positions</div><div class="sc-val" id="s-pos">—</div><div class="sc-sub">filtered results</div></div>
-      <div class="sc"><div class="sc-label">Brokers</div><div class="sc-val" id="s-brk">—</div><div class="sc-sub">active in view</div></div>
-      <div class="sc"><div class="sc-label">Net Holdings</div><div class="sc-val" id="s-net">—</div><div class="sc-sub">filtered total qty</div></div>
-      <div class="sc"><div class="sc-label">Top Broker</div><div class="sc-val" id="s-top">—</div><div class="sc-sub" id="s-top-name">by net holding</div></div>
-    </div>
-
-    <div class="fp">
-      <div class="fg"><label>Stock Symbol ★</label>
-        <select id="f-sym"><option value="">-- Select Symbol --</option></select></div>
-      <div class="fg"><label>Broker #</label><input type="text" id="f-brk" placeholder="e.g. 58"></div>
-      <div class="fg"><label>Broker Name</label><input type="text" id="f-bname" placeholder="e.g. Sunrise"></div>
-      <div class="fg"><label>Date From</label><input type="date" id="f-dfrom"></div>
-      <div class="fg"><label>Date To</label><input type="date" id="f-dto"></div>
-      <div class="fg"><label>Min Holding</label><input type="text" id="f-minq" placeholder="e.g. 500"></div>
-      <div class="fg"><label>Show</label>
-        <select id="f-side">
-          <option value="all">All positions</option>
-          <option value="pos">Positive only</option>
-          <option value="neg">Negative only</option>
-        </select></div>
-      <div class="btns">
-        <button class="btn btn-p" onclick="applyFilters()">Search</button>
-        <button class="btn btn-g" onclick="resetFilters()">Reset</button>
-      </div>
-    </div>
-
-    <div class="status-bar" id="status">Select a stock symbol above and click Search.</div>
-
-    <div class="tabs">
-      <div class="tab active" onclick="showTab('daily')">Daily Holdings</div>
-      <div class="tab" onclick="showTab('cumul')">Cumulative</div>
-      <div class="tab" onclick="showTab('topb')">Top Brokers Chart</div>
-    </div>
-
-    <div id="tab-daily">
-      <div class="tw">
-        <div class="th2"><span class="ttitle">Daily Holdings per Broker per Stock</span><span class="tcnt" id="cnt-d">—</span></div>
-        <div class="tscroll"><table>
-          <thead><tr>
-            <th onclick="srtD('date')">Date ↕</th><th onclick="srtD('symbol')">Symbol ↕</th>
-            <th onclick="srtD('broker')">Broker # ↕</th><th>Broker Name</th>
-            <th onclick="srtD('buy_qty')">Buy Qty ↕</th><th onclick="srtD('total_sale_qty')">Sale Qty ↕</th>
-            <th onclick="srtD('ipo_sale_qty')">IPO Sale ↕</th><th onclick="srtD('bulk_sale_qty')">Bulk Sale ↕</th>
-            <th onclick="srtD('holding_qty')">Net Holding ↕</th><th onclick="srtD('avg_rate')">Avg Rate ↕</th>
-          </tr></thead>
-          <tbody id="tbody-d"><tr><td colspan="10"><div class="empty">Select a symbol and click Search.</div></td></tr></tbody>
-        </table></div>
-        <div class="pag">
-          <span id="pi-d">—</span>
-          <div class="pbtns">
-            <button class="pb" id="pp-d" onclick="chpg(-1,'d')" disabled>← Prev</button>
-            <button class="pb" id="pn-d" onclick="chpg(1,'d')"  disabled>Next →</button>
-          </div>
+  <!-- TAB 2: CUMULATIVE -->
+  <div id="tab-cumul" style="display:none">
+    <div class="tw">
+      <div class="th2"><span class="ttitle">Cumulative Net Holdings (All Dates)</span><span class="tcnt" id="cnt-c">—</span></div>
+      <div class="tscroll"><table>
+        <thead><tr>
+          <th>Rank</th><th onclick="csrt('symbol')">Symbol ↕</th>
+          <th onclick="csrt('broker')">Broker # ↕</th><th>Broker Name</th>
+          <th onclick="csrt('total_buy_qty')">Total Buy ↕</th><th onclick="csrt('total_sale_qty')">Total Sale ↕</th>
+          <th onclick="csrt('total_ipo_qty')">IPO Sale ↕</th><th onclick="csrt('total_bulk_qty')">Bulk Sale ↕</th>
+          <th onclick="csrt('net_holding')">Net Holding ↕</th><th onclick="csrt('avg_rate')">Avg Rate ↕</th>
+        </tr></thead>
+        <tbody id="tbody-c"></tbody>
+      </table></div>
+      <div class="pag">
+        <span id="pi-c">—</span>
+        <div class="pbtns">
+          <button class="pb" id="pp-c" onclick="chpg(-1,'c')" disabled>← Prev</button>
+          <button class="pb" id="pn-c" onclick="chpg(1,'c')"  disabled>Next →</button>
         </div>
       </div>
     </div>
+  </div>
 
-    <div id="tab-cumul" style="display:none">
+  <!-- TAB 3: TOP BROKERS CHART -->
+  <div id="tab-topb" style="display:none">
+    <div class="cw">
+      <div class="ctitle" id="chart-title">Select a stock symbol to see top brokers</div>
+      <div class="barchart" id="barchart"><div class="empty">Use the Stock Symbol filter above and click Search.</div></div>
+    </div>
+  </div>
+
+  <!-- TAB 4: MARKET SUMMARY -->
+  <div id="tab-mkt" style="display:none">
+
+    <!-- Spotlight cards for highest vol script today -->
+    <div class="ms-section-title" id="ms-title">Loading today's market data…</div>
+    <div id="spotlight-wrap">
+      <div class="empty"><div class="spinner"></div>Loading…</div>
+    </div>
+
+    <!-- High volume table today -->
+    <div class="tw" style="margin-top:4px">
+      <div class="th2">
+        <span class="ttitle" id="vol-table-title">Top scripts by volume today</span>
+        <span class="tcnt" id="vol-cnt">—</span>
+      </div>
+      <div class="tscroll"><table>
+        <thead><tr>
+          <th>#</th>
+          <th>Symbol</th>
+          <th>Security Name</th>
+          <th onclick="sortVol('volume')">Volume (Buy Qty) ↕</th>
+          <th onclick="sortVol('total_sale_qty')">Sell Qty ↕</th>
+          <th onclick="sortVol('top_buyer_qty')">Top Buyer ↕</th>
+          <th onclick="sortVol('top_seller_qty')">Top Seller ↕</th>
+          <th onclick="sortVol('top_holder_qty')">Top Holder ↕</th>
+          <th onclick="sortVol('avg_rate')">Avg Rate ↕</th>
+        </tr></thead>
+        <tbody id="vol-tbody"><tr><td colspan="9"><div class="empty"><div class="spinner"></div>Loading…</div></td></tr></tbody>
+      </table></div>
+    </div>
+
+    <!-- Script detail panel -->
+    <div class="dp-panel" id="dp-panel">
+      <div class="dp-header">
+        <span class="dp-sym" id="dp-sym">—</span>
+        <button class="dp-close" onclick="closeDetail()">✕ Close</button>
+      </div>
+      <div class="dp-stats-grid" id="dp-stats"></div>
       <div class="tw">
-        <div class="th2"><span class="ttitle">Cumulative Net Holdings (All Dates)</span><span class="tcnt" id="cnt-c">—</span></div>
+        <div class="th2">
+          <span class="ttitle">Daily breakdown — <span id="dp-sym2">—</span></span>
+          <span class="tcnt" id="dp-cnt">—</span>
+        </div>
         <div class="tscroll"><table>
           <thead><tr>
-            <th>Rank</th><th onclick="csrt('symbol')">Symbol ↕</th>
-            <th onclick="csrt('broker')">Broker # ↕</th><th>Broker Name</th>
-            <th onclick="csrt('total_buy_qty')">Total Buy ↕</th><th onclick="csrt('total_sale_qty')">Total Sale ↕</th>
-            <th onclick="csrt('total_ipo_qty')">IPO Sale ↕</th><th onclick="csrt('total_bulk_qty')">Bulk Sale ↕</th>
-            <th onclick="csrt('net_holding')">Net Holding ↕</th><th onclick="csrt('avg_rate')">Avg Rate ↕</th>
+            <th onclick="sortDet('date')">Date ↕</th>
+            <th onclick="sortDet('volume')">Volume ↕</th>
+            <th onclick="sortDet('total_sale_qty')">Sell Qty ↕</th>
+            <th onclick="sortDet('rank')">Rank ↕</th>
+            <th onclick="sortDet('top_buyer_qty')">Top Buyer ↕</th>
+            <th onclick="sortDet('top_seller_qty')">Top Seller ↕</th>
+            <th onclick="sortDet('top_holder_qty')">Top Holder ↕</th>
+            <th onclick="sortDet('avg_rate')">Avg Rate ↕</th>
           </tr></thead>
-          <tbody id="tbody-c"></tbody>
+          <tbody id="dp-tbody"></tbody>
         </table></div>
-        <div class="pag">
-          <span id="pi-c">—</span>
-          <div class="pbtns">
-            <button class="pb" id="pp-c" onclick="chpg(-1,'c')" disabled>← Prev</button>
-            <button class="pb" id="pn-c" onclick="chpg(1,'c')"  disabled>Next →</button>
-          </div>
-        </div>
       </div>
     </div>
 
-    <div id="tab-topb" style="display:none">
-      <div class="cw">
-        <div class="ctitle" id="chart-title">Select a stock symbol to see top brokers</div>
-        <div class="barchart" id="barchart"><div class="empty">Use the Stock Symbol filter above and click Search.</div></div>
-      </div>
+    <!-- Weekly top 10 -->
+    <div class="cw">
+      <div class="ctitle">Top 10 scripts by volume — last 5 trading days</div>
+      <div class="weekly-bars" id="weekly-bars"><div class="empty"><div class="spinner"></div>Loading…</div></div>
     </div>
 
   </div>
@@ -722,193 +691,178 @@ const SUPABASE_URL = "{SUPABASE_URL}";
 const SUPABASE_ANON_KEY = "{SUPABASE_ANON_KEY}";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ── STATE ──────────────────────────────────────────────────────────────────
 let DAILY=[],CUMUL=[],FD=[],FC=[];
 let dCol='holding_qty',dAsc=false,cCol='net_holding',cAsc=false;
 let pg={{d:1,c:1}};
 const PS=50;
 let loading=false;
-let VOL_DATA=[];
-let volCol='volume',volAsc=false;
-let DETAIL_DATA=[],detCol='volume',detAsc=false;
-let TODAY_STR='';
+let VOL_DATA=[], volCol='volume', volAsc=false;
+let DET_DATA=[],  detCol='date',   detAsc=false;  // default sort by date
+let TODAY_STR='', mktLoaded=false;
 
-// ── HELPERS ────────────────────────────────────────────────────────────────
 const fmt  = n => Number(n||0).toLocaleString();
 const fmtf = n => Number(n||0).toFixed(2);
+
 function getToday(){{
-  const d = new Date();
-  const pad = n => String(n).padStart(2,'0');
-  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+  const d=new Date(), pad=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 }}
-function getLast5TradingDays(){{
-  const days=[]; let d=new Date(); let count=0;
+function getLast5(){{
+  const days=[]; let d=new Date(), count=0;
   while(count<5){{
     const dow=d.getDay();
-    if(dow>=1 && dow<=5) {{ days.push(d.toISOString().split('T')[0]); count++; }}
+    if(dow>=1&&dow<=5){{days.push(d.toISOString().split('T')[0]);count++;}}
     d.setDate(d.getDate()-1);
   }}
   return days;
 }}
 function rankBadge(n){{
-  const cls=['rank-1','rank-2','rank-3'][n-1]||'rank-n';
-  const label=['🥇','🥈','🥉'][n-1]||n;
-  return '<span class="rank-badge '+cls+'">'+label+'</span>';
+  const cls=n===1?'rk1':n===2?'rk2':n===3?'rk3':'rkn';
+  const lbl=n===1?'🥇':n===2?'🥈':n===3?'🥉':n;
+  return '<span class="rank-badge '+cls+'">'+lbl+'</span>';
+}}
+function brkCell(broker,name,qty,cls){{
+  cls=cls||'';
+  return '<div class="brk-cell"><span class="brk '+cls+'">'+broker+'</span>'
+    +'<div class="bname">'+(name||'')+'</div>'
+    +'<div class="m '+(cls==='sell'?'neg':cls==='hold'?'pos':'')+'">'+fmt(qty)+'</div></div>';
 }}
 
 // ── MARKET SUMMARY ─────────────────────────────────────────────────────────
 async function loadMarketSummary(){{
+  if(mktLoaded) return;
   TODAY_STR = getToday();
-  document.getElementById('today-date').textContent = TODAY_STR;
-  document.getElementById('gen-at').textContent = new Date().toLocaleTimeString();
-  document.getElementById('ms-date-label').textContent = 'Today: ' + TODAY_STR;
+  document.getElementById('today-lbl').textContent = TODAY_STR;
+  document.getElementById('gen-at').textContent    = new Date().toLocaleTimeString();
 
-  try {{
-    // Fetch ALL holdings for today — paginate to get everything
+  try{{
+    // Paginate to fetch ALL today's holdings
     let allRows=[], offset=0, limit=1000;
     while(true){{
-      const {{data,error}} = await sb.from('holdings').select(
-        'symbol,security_name,broker,broker_name,buy_qty,total_sale_qty,holding_qty,avg_rate'
-      ).eq('date', TODAY_STR).range(offset, offset+limit-1);
+      const {{data,error}}=await sb.from('holdings')
+        .select('symbol,security_name,broker,broker_name,buy_qty,total_sale_qty,holding_qty,avg_rate')
+        .eq('date',TODAY_STR).range(offset,offset+limit-1);
       if(error) throw error;
       allRows.push(...(data||[]));
-      if(!data || data.length < limit) break;
-      offset += limit;
+      if(!data||data.length<limit) break;
+      offset+=limit;
     }}
 
     if(!allRows.length){{
-      const msg = '<div class="ms-loading">No data for today (' + TODAY_STR + '). Market may be closed or data not yet fetched.</div>';
-      document.getElementById('spotlight-cards').innerHTML = msg;
-      document.getElementById('vol-tbody').innerHTML = '<tr><td colspan="9"><div class="empty">No data for today.</div></td></tr>';
-      document.getElementById('weekly-bars').innerHTML = '<div class="empty">No recent data.</div>';
+      document.getElementById('spotlight-wrap').innerHTML=
+        '<div class="empty">No data for today ('+TODAY_STR+'). Market may be closed.</div>';
+      document.getElementById('vol-tbody').innerHTML=
+        '<tr><td colspan="9"><div class="empty">No data for today.</div></td></tr>';
+      document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';
+      document.getElementById('ms-title').textContent='No market data for today ('+TODAY_STR+')';
       return;
     }}
 
-    // ── Aggregate by symbol — all figures from today's holdings rows ─────
-    const symMap = {{}};
+    // Aggregate per symbol — all metrics from today's holdings rows
+    const symMap={{}};
     for(const r of allRows){{
-      const s = r.symbol;
-      if(!symMap[s]) symMap[s] = {{
-        symbol        : s,
-        security_name : r.security_name || s,
-        buy_qty       : 0,
-        total_sale_qty: 0,
-        // for finding top broker per metric
-        brokers       : []
+      const s=r.symbol;
+      if(!symMap[s]) symMap[s]={{
+        symbol:s, security_name:r.security_name||s,
+        buy_qty:0, total_sale_qty:0, brokers:[]
       }};
-      symMap[s].buy_qty         += (r.buy_qty        || 0);
-      symMap[s].total_sale_qty  += (r.total_sale_qty || 0);
+      symMap[s].buy_qty        +=(r.buy_qty||0);
+      symMap[s].total_sale_qty +=(r.total_sale_qty||0);
       symMap[s].brokers.push(r);
     }}
 
-    // For each symbol find top buyer, top seller, top holder — all from today
-    VOL_DATA = Object.values(symMap).map(sm => {{
-      const brokers = sm.brokers;
-
-      // Top buyer = broker with highest buy_qty today
-      const topBuyer = brokers.reduce((best,r) =>
-        (r.buy_qty||0) > (best.buy_qty||0) ? r : best, brokers[0]);
-
-      // Top seller = broker with highest total_sale_qty today
-      const topSeller = brokers.reduce((best,r) =>
-        (r.total_sale_qty||0) > (best.total_sale_qty||0) ? r : best, brokers[0]);
-
-      // Top holder = broker with highest holding_qty today
-      const topHolder = brokers.reduce((best,r) =>
-        (r.holding_qty||0) > (best.holding_qty||0) ? r : best, brokers[0]);
-
+    VOL_DATA = Object.values(symMap).map(sm=>{{
+      const B=sm.brokers;
+      // top buyer = highest buy_qty today
+      const tb=B.reduce((b,r)=>(r.buy_qty||0)>(b.buy_qty||0)?r:b, B[0]);
+      // top seller = highest total_sale_qty today
+      const ts=B.reduce((b,r)=>(r.total_sale_qty||0)>(b.total_sale_qty||0)?r:b, B[0]);
+      // top holder = highest holding_qty today
+      const th=B.reduce((b,r)=>(r.holding_qty||0)>(b.holding_qty||0)?r:b, B[0]);
       return {{
-        symbol         : sm.symbol,
-        security_name  : sm.security_name,
-        volume         : sm.buy_qty,            // volume = buy_qty only
-        buy_qty        : sm.buy_qty,
-        total_sale_qty : sm.total_sale_qty,
-        top_buyer      : topBuyer.broker     || '—',
-        top_buyer_name : topBuyer.broker_name|| '',
-        top_buyer_qty  : topBuyer.buy_qty    || 0,
-        top_seller     : topSeller.broker     || '—',
-        top_seller_name: topSeller.broker_name|| '',
-        top_seller_qty : topSeller.total_sale_qty || 0,
-        top_holder     : topHolder.broker     || '—',
-        top_holder_name: topHolder.broker_name|| '',
-        top_holder_qty : topHolder.holding_qty|| 0,
-        avg_rate       : topHolder.avg_rate   || 0,  // avg_rate of top holder
+        symbol          : sm.symbol,
+        security_name   : sm.security_name,
+        volume          : sm.buy_qty,
+        total_sale_qty  : sm.total_sale_qty,
+        top_buyer       : tb.broker||'—', top_buyer_name : tb.broker_name||'', top_buyer_qty  : tb.buy_qty||0,
+        top_seller      : ts.broker||'—', top_seller_name: ts.broker_name||'', top_seller_qty : ts.total_sale_qty||0,
+        top_holder      : th.broker||'—', top_holder_name: th.broker_name||'', top_holder_qty : th.holding_qty||0,
+        avg_rate        : th.avg_rate||0,
       }};
-    }}).sort((a,b) => b.volume - a.volume);
+    }}).sort((a,b)=>b.volume-a.volume);
 
-    renderVolTable();
+    document.getElementById('ms-title').textContent =
+      'Today — ' + TODAY_STR + ' · ' + VOL_DATA.length + ' symbols traded';
     renderSpotlight();
+    renderVolTable();
     await loadWeekly();
+    mktLoaded = true;
 
-  }} catch(e) {{
-    console.error('Market summary error:', e);
-    document.getElementById('spotlight-cards').innerHTML =
-      '<div class="ms-loading">Error: ' + e.message + '</div>';
+  }}catch(e){{
+    console.error(e);
+    document.getElementById('spotlight-wrap').innerHTML='<div class="empty">Error: '+e.message+'</div>';
   }}
 }}
 
 function renderSpotlight(){{
   if(!VOL_DATA.length) return;
-  const top = VOL_DATA[0];  // highest volume script today
-  document.getElementById('spotlight-cards').innerHTML = `
+  const top=VOL_DATA[0];
+  document.getElementById('spotlight-wrap').innerHTML=`
     <div class="spotlight-grid">
       <div class="sp-card buy" onclick="openDetail('${{top.symbol}}')">
-        <div class="sp-label">Top buyer today — ${{top.symbol}}</div>
-        <div class="sp-sym buy">Broker ${{top.top_buyer}}</div>
+        <div class="sp-label">Top buyer — ${{top.symbol}}</div>
+        <div class="sp-broker buy">Broker ${{top.top_buyer}}</div>
         <div class="sp-name">${{top.top_buyer_name||'—'}}</div>
-        <div class="sp-qty">Bought ${{fmt(top.top_buyer_qty)}} shares</div>
+        <div class="sp-qty">${{fmt(top.top_buyer_qty)}} shares bought</div>
       </div>
       <div class="sp-card sell" onclick="openDetail('${{top.symbol}}')">
-        <div class="sp-label">Top seller today — ${{top.symbol}}</div>
-        <div class="sp-sym sell">Broker ${{top.top_seller}}</div>
+        <div class="sp-label">Top seller — ${{top.symbol}}</div>
+        <div class="sp-broker sell">Broker ${{top.top_seller}}</div>
         <div class="sp-name">${{top.top_seller_name||'—'}}</div>
-        <div class="sp-qty">Sold ${{fmt(top.top_seller_qty)}} shares</div>
+        <div class="sp-qty">${{fmt(top.top_seller_qty)}} shares sold</div>
       </div>
       <div class="sp-card hold" onclick="openDetail('${{top.symbol}}')">
-        <div class="sp-label">Top holder today — ${{top.symbol}}</div>
-        <div class="sp-sym hold">Broker ${{top.top_holder}}</div>
+        <div class="sp-label">Top holder — ${{top.symbol}}</div>
+        <div class="sp-broker hold">Broker ${{top.top_holder}}</div>
         <div class="sp-name">${{top.top_holder_name||'—'}}</div>
-        <div class="sp-qty">Holds ${{fmt(top.top_holder_qty)}} shares</div>
+        <div class="sp-qty">${{fmt(top.top_holder_qty)}} shares held</div>
       </div>
       <div class="sp-card rate" onclick="openDetail('${{top.symbol}}')">
         <div class="sp-label">Avg rate of top holder</div>
-        <div class="sp-sym rate">Rs ${{fmtf(top.avg_rate)}}</div>
+        <div class="sp-broker rate">Rs ${{fmtf(top.avg_rate)}}</div>
         <div class="sp-name">Broker ${{top.top_holder}} · ${{top.top_holder_name||''}}</div>
-        <div class="sp-qty">Highest traded: ${{top.symbol}}</div>
+        <div class="sp-qty">Highest vol script: ${{top.symbol}}</div>
       </div>
     </div>`;
 }}
 
-function doSortVol(arr,col,asc){{
+function doSort2(arr,col,asc){{
   return [...arr].sort((a,b)=>{{
     let va=a[col],vb=b[col];
     if(typeof va==='number') return asc?va-vb:vb-va;
     return asc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
   }});
 }}
-function sortVol(col){{
-  if(volCol===col) volAsc=!volAsc; else {{volCol=col;volAsc=false;}}
-  renderVolTable();
-}}
+function sortVol(col){{if(volCol===col)volAsc=!volAsc;else{{volCol=col;volAsc=false;}}renderVolTable();}}
 
 function renderVolTable(){{
-  const data = doSortVol(VOL_DATA, volCol, volAsc);
-  const maxV = data.length ? data[0].volume : 1;
-  document.getElementById('vol-cnt').textContent = data.length + ' symbols';
-  const tb = document.getElementById('vol-tbody');
+  const data=doSort2(VOL_DATA,volCol,volAsc);
+  const maxV=data.length?data[0].volume:1;
+  document.getElementById('vol-cnt').textContent=data.length+' symbols';
+  document.getElementById('vol-table-title').textContent='Top scripts by volume — '+TODAY_STR;
+  const tb=document.getElementById('vol-tbody');
   if(!data.length){{tb.innerHTML='<tr><td colspan="9"><div class="empty">No data.</div></td></tr>';return;}}
-  tb.innerHTML = data.map((r,i) => {{
-    const pct = Math.max(2, r.volume/maxV*80);
-    return `<tr onclick="openDetail('${{r.symbol}}')">
+  tb.innerHTML=data.map((r,i)=>{{
+    const pct=Math.max(2,r.volume/maxV*80);
+    return `<tr onclick="openDetail('${{r.symbol}}')" style="cursor:pointer">
       <td>${{rankBadge(i+1)}}</td>
       <td class="sym">${{r.symbol}}</td>
-      <td class="bname">${{r.security_name}}</td>
-      <td><div class="vol-wrap"><div class="vol-track"><div class="vol-bar" style="width:${{pct}}px"></div></div><span class="m">${{fmt(r.volume)}}</span></div></td>
-      <td class="pos">${{fmt(r.buy_qty)}}</td>
-      <td class="neg">${{fmt(r.total_sale_qty)}}</td>
-      <td><span class="brk">${{r.top_buyer}}</span></td>
-      <td><span class="brk sell">${{r.top_seller}}</span></td>
-      <td><span class="brk hold">${{r.top_holder}}</span></td>
+      <td class="bname" style="max-width:160px">${{r.security_name}}</td>
+      <td><div class="vol-wrap"><div class="vol-track"><div class="vol-bar" style="width:${{pct}}px"></div></div><span class="m pos">${{fmt(r.volume)}}</span></div></td>
+      <td class="m neg">${{fmt(r.total_sale_qty)}}</td>
+      <td>${{brkCell(r.top_buyer,r.top_buyer_name,r.top_buyer_qty,'')}}</td>
+      <td>${{brkCell(r.top_seller,r.top_seller_name,r.top_seller_qty,'sell')}}</td>
+      <td>${{brkCell(r.top_holder,r.top_holder_name,r.top_holder_qty,'hold')}}</td>
       <td class="m" style="color:var(--amber)">Rs ${{fmtf(r.avg_rate)}}</td>
     </tr>`;
   }}).join('');
@@ -916,172 +870,134 @@ function renderVolTable(){{
 
 // ── SCRIPT DETAIL ──────────────────────────────────────────────────────────
 async function openDetail(sym){{
-  const panel = document.getElementById('detail-panel');
-  document.getElementById('dp-sym').textContent  = sym;
-  document.getElementById('dp-sym2').textContent = sym;
+  const panel=document.getElementById('dp-panel');
+  document.getElementById('dp-sym').textContent =sym;
+  document.getElementById('dp-sym2').textContent=sym;
   panel.classList.add('open');
-  panel.scrollIntoView({{behavior:'smooth', block:'start'}});
-  document.getElementById('dp-tbody').innerHTML =
-    '<tr><td colspan="9"><div class="empty"><div class="spinner" style="margin:0 auto 8px"></div>Loading…</div></td></tr>';
+  panel.scrollIntoView({{behavior:'smooth',block:'start'}});
+  document.getElementById('dp-tbody').innerHTML=
+    '<tr><td colspan="8"><div class="empty"><div class="spinner" style="margin:0 auto 8px"></div>Loading…</div></td></tr>';
 
-  try {{
-    // Fetch ALL historical holdings for this symbol
-    let allRows=[], offset=0, limit=1000;
+  try{{
+    let all=[], offset=0, limit=1000;
     while(true){{
-      const {{data,error}} = await sb.from('holdings').select(
-        'date,broker,broker_name,buy_qty,total_sale_qty,holding_qty,avg_rate'
-      ).eq('symbol', sym).range(offset, offset+limit-1);
+      const {{data,error}}=await sb.from('holdings')
+        .select('date,broker,broker_name,buy_qty,total_sale_qty,holding_qty,avg_rate')
+        .eq('symbol',sym).range(offset,offset+limit-1);
       if(error) throw error;
-      allRows.push(...(data||[]));
+      all.push(...(data||[]));
       if(!data||data.length<limit) break;
       offset+=limit;
     }}
-
-    if(!allRows.length){{
-      document.getElementById('dp-tbody').innerHTML =
-        '<tr><td colspan="9"><div class="empty">No data found for ' + sym + '</div></td></tr>';
+    if(!all.length){{
+      document.getElementById('dp-tbody').innerHTML=
+        '<tr><td colspan="8"><div class="empty">No data for '+sym+'</div></td></tr>';
       return;
     }}
 
-    // ── Aggregate by date — find top buyer/seller/holder PER DATE ─────────
-    const dateMap = {{}};
-    for(const r of allRows){{
-      const d = r.date;
-      if(!dateMap[d]) dateMap[d] = {{ date:d, brokers:[], buy_qty:0, total_sale_qty:0 }};
-      dateMap[d].buy_qty        += (r.buy_qty        || 0);
-      dateMap[d].total_sale_qty += (r.total_sale_qty || 0);
-      dateMap[d].brokers.push(r);
+    // Aggregate by date
+    const dm={{}};
+    for(const r of all){{
+      if(!dm[r.date]) dm[r.date]={{date:r.date,rows:[],buy_qty:0,total_sale_qty:0}};
+      dm[r.date].buy_qty        +=(r.buy_qty||0);
+      dm[r.date].total_sale_qty +=(r.total_sale_qty||0);
+      dm[r.date].rows.push(r);
     }}
 
-    DETAIL_DATA = Object.values(dateMap).map(dm => {{
-      const brokers = dm.brokers;
-
-      // Top buyer = highest buy_qty on this date
-      const tb = brokers.reduce((b,r)=>(r.buy_qty||0)>(b.buy_qty||0)?r:b, brokers[0]);
-      // Top seller = highest total_sale_qty on this date
-      const ts = brokers.reduce((b,r)=>(r.total_sale_qty||0)>(b.total_sale_qty||0)?r:b, brokers[0]);
-      // Top holder = highest holding_qty on this date
-      const th = brokers.reduce((b,r)=>(r.holding_qty||0)>(b.holding_qty||0)?r:b, brokers[0]);
-
+    DET_DATA = Object.values(dm).map(d=>{{
+      const R=d.rows;
+      const tb=R.reduce((b,r)=>(r.buy_qty||0)>(b.buy_qty||0)?r:b,R[0]);
+      const ts=R.reduce((b,r)=>(r.total_sale_qty||0)>(b.total_sale_qty||0)?r:b,R[0]);
+      const th=R.reduce((b,r)=>(r.holding_qty||0)>(b.holding_qty||0)?r:b,R[0]);
       return {{
-        date           : dm.date,
-        volume         : dm.buy_qty,               // volume = buy_qty
-        buy_qty        : dm.buy_qty,
-        total_sale_qty : dm.total_sale_qty,
-        top_buyer      : tb.broker      || '—',
-        top_buyer_name : tb.broker_name || '',
-        top_seller     : ts.broker      || '—',
-        top_seller_name: ts.broker_name || '',
-        top_holder     : th.broker      || '—',
-        top_holder_name: th.broker_name || '',
-        avg_rate       : th.avg_rate    || 0,      // avg_rate of top holder on this date
+        date           : d.date,
+        volume         : d.buy_qty,
+        total_sale_qty : d.total_sale_qty,
+        top_buyer      : tb.broker||'—', top_buyer_name : tb.broker_name||'', top_buyer_qty  : tb.buy_qty||0,
+        top_seller     : ts.broker||'—', top_seller_name: ts.broker_name||'', top_seller_qty : ts.total_sale_qty||0,
+        top_holder     : th.broker||'—', top_holder_name: th.broker_name||'', top_holder_qty : th.holding_qty||0,
+        avg_rate       : th.avg_rate||0,
       }};
     }});
 
-    // Assign daily rank by volume (buy_qty) desc
-    const sorted = [...DETAIL_DATA].sort((a,b) => b.volume - a.volume);
-    sorted.forEach((r,i) => r.rank = i+1);
-    // preserve rank on original objects
-    const rankByDate = {{}};
-    sorted.forEach(r => rankByDate[r.date] = r.rank);
-    DETAIL_DATA.forEach(r => r.rank = rankByDate[r.date]);
+    // Assign volume-based rank
+    const ranked=[...DET_DATA].sort((a,b)=>b.volume-a.volume);
+    ranked.forEach((r,i)=>r.rank=i+1);
+    const rkMap={{}};
+    ranked.forEach(r=>rkMap[r.date]=r.rank);
+    DET_DATA.forEach(r=>r.rank=rkMap[r.date]);
 
-    // Summary stats
-    const totalVol  = DETAIL_DATA.reduce((s,r)=>s+r.volume,0);
-    const totalBuy  = DETAIL_DATA.reduce((s,r)=>s+r.buy_qty,0);
-    const totalSell = DETAIL_DATA.reduce((s,r)=>s+r.total_sale_qty,0);
-    const topDate   = sorted[0];
+    // Default sort: by date descending
+    detCol='date'; detAsc=false;
 
-    document.getElementById('dp-stats').innerHTML = `
-      <div class="dp-stat"><div class="dp-stat-label">Trading Days</div><div class="dp-stat-val c">${{DETAIL_DATA.length}}</div></div>
-      <div class="dp-stat"><div class="dp-stat-label">Total Volume</div><div class="dp-stat-val c">${{fmt(totalVol)}}</div></div>
-      <div class="dp-stat"><div class="dp-stat-label">Total Bought</div><div class="dp-stat-val g">${{fmt(totalBuy)}}</div></div>
-      <div class="dp-stat"><div class="dp-stat-label">Total Sold</div><div class="dp-stat-val r">${{fmt(totalSell)}}</div></div>
-      <div class="dp-stat"><div class="dp-stat-label">Highest Vol Date</div><div class="dp-stat-val a">${{topDate?topDate.date:'—'}}</div></div>
-      <div class="dp-stat"><div class="dp-stat-label">Highest Vol Qty</div><div class="dp-stat-val c">${{topDate?fmt(topDate.volume):'—'}}</div></div>`;
+    const tv=DET_DATA.reduce((s,r)=>s+r.volume,0);
+    const tb2=DET_DATA.reduce((s,r)=>s+r.total_sale_qty,0);
+    const peak=[...DET_DATA].sort((a,b)=>b.volume-a.volume)[0];
+    document.getElementById('dp-stats').innerHTML=`
+      <div class="dp-stat"><div class="dp-stat-label">Trading Days</div><div class="dp-stat-val" style="color:var(--cyan)">${{DET_DATA.length}}</div></div>
+      <div class="dp-stat"><div class="dp-stat-label">Total Buy Vol</div><div class="dp-stat-val" style="color:var(--green)">${{fmt(tv)}}</div></div>
+      <div class="dp-stat"><div class="dp-stat-label">Total Sell Vol</div><div class="dp-stat-val" style="color:var(--red)">${{fmt(tb2)}}</div></div>
+      <div class="dp-stat"><div class="dp-stat-label">Peak Vol Date</div><div class="dp-stat-val" style="color:var(--amber);font-size:13px">${{peak?peak.date:'—'}}</div></div>
+      <div class="dp-stat"><div class="dp-stat-label">Peak Volume</div><div class="dp-stat-val" style="color:var(--cyan)">${{peak?fmt(peak.volume):'—'}}</div></div>`;
 
-    document.getElementById('dp-cnt').textContent = DETAIL_DATA.length + ' trading days';
-    renderDetailTable();
+    document.getElementById('dp-cnt').textContent=DET_DATA.length+' trading days';
+    renderDetTable();
 
-  }} catch(e) {{
-    console.error('Detail error:', e);
-    document.getElementById('dp-tbody').innerHTML =
-      '<tr><td colspan="9"><div class="empty">Error: ' + e.message + '</div></td></tr>';
+  }}catch(e){{
+    document.getElementById('dp-tbody').innerHTML=
+      '<tr><td colspan="8"><div class="empty">Error: '+e.message+'</div></td></tr>';
   }}
 }}
 
-function sortDetail(col){{
-  if(detCol===col) detAsc=!detAsc; else {{detCol=col;detAsc=false;}}
-  renderDetailTable();
-}}
+function sortDet(col){{if(detCol===col)detAsc=!detAsc;else{{detCol=col;detAsc=false;}}renderDetTable();}}
+function closeDetail(){{document.getElementById('dp-panel').classList.remove('open');}}
 
-function renderDetailTable(){{
-  const data = doSortVol(DETAIL_DATA, detCol, detAsc);
-  document.getElementById('dp-tbody').innerHTML = data.map(r =>
+function renderDetTable(){{
+  const data=doSort2(DET_DATA,detCol,detAsc);
+  document.getElementById('dp-tbody').innerHTML=data.map(r=>
     `<tr>
       <td class="m">${{r.date}}</td>
+      <td><div class="vol-wrap"><span class="m pos">${{fmt(r.volume)}}</span></div></td>
+      <td class="m neg">${{fmt(r.total_sale_qty)}}</td>
       <td>${{rankBadge(r.rank)}}</td>
-      <td class="m">${{fmt(r.volume)}}</td>
-      <td class="pos">${{fmt(r.buy_qty)}}</td>
-      <td class="neg">${{fmt(r.total_sale_qty)}}</td>
-      <td><span class="brk">${{r.top_buyer}}</span><div class="bname">${{r.top_buyer_name}}</div></td>
-      <td><span class="brk sell">${{r.top_seller}}</span><div class="bname">${{r.top_seller_name}}</div></td>
-      <td><span class="brk hold">${{r.top_holder}}</span><div class="bname">${{r.top_holder_name}}</div></td>
+      <td>${{brkCell(r.top_buyer,r.top_buyer_name,r.top_buyer_qty,'')}}</td>
+      <td>${{brkCell(r.top_seller,r.top_seller_name,r.top_seller_qty,'sell')}}</td>
+      <td>${{brkCell(r.top_holder,r.top_holder_name,r.top_holder_qty,'hold')}}</td>
       <td class="m" style="color:var(--amber)">Rs ${{fmtf(r.avg_rate)}}</td>
     </tr>`).join('');
 }}
 
-function closeDetail(){{
-  document.getElementById('detail-panel').classList.remove('open');
-}}
-
-// ── WEEKLY TOP 10 ──────────────────────────────────────────────────────────
+// ── WEEKLY ─────────────────────────────────────────────────────────────────
 async function loadWeekly(){{
-  const days = getLast5TradingDays();
-  try {{
-    // Fetch buy_qty for last 5 trading days — volume = buy_qty only
-    let allRows=[], offset=0, limit=1000;
+  const days=getLast5();
+  try{{
+    let all=[], offset=0, limit=1000;
     while(true){{
-      const {{data,error}} = await sb.from('holdings').select('symbol,buy_qty')
-        .in('date', days).range(offset, offset+limit-1);
+      const {{data,error}}=await sb.from('holdings').select('symbol,buy_qty')
+        .in('date',days).range(offset,offset+limit-1);
       if(error) throw error;
-      allRows.push(...(data||[]));
+      all.push(...(data||[]));
       if(!data||data.length<limit) break;
       offset+=limit;
     }}
-
-    // Sum buy_qty per symbol across all 5 days
-    const symVol = {{}};
-    for(const r of allRows){{
-      if(!symVol[r.symbol]) symVol[r.symbol] = 0;
-      symVol[r.symbol] += (r.buy_qty || 0);
-    }}
-
-    const top10 = Object.entries(symVol)
-      .sort((a,b) => b[1]-a[1]).slice(0,10);
-
-    if(!top10.length){{
-      document.getElementById('weekly-bars').innerHTML = '<div class="empty">No weekly data.</div>';
-      return;
-    }}
-
-    const maxV = top10[0][1];
-    const medals = ['🥇','🥈','🥉'];
-    document.getElementById('weekly-bars').innerHTML = top10.map(([sym,vol],i) => {{
-      const pct = Math.max(2, vol/maxV*100);
+    const sv={{}};
+    for(const r of all){{if(!sv[r.symbol])sv[r.symbol]=0;sv[r.symbol]+=(r.buy_qty||0);}}
+    const top10=Object.entries(sv).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    if(!top10.length){{document.getElementById('weekly-bars').innerHTML='<div class="empty">No weekly data.</div>';return;}}
+    const maxV=top10[0][1];
+    const medals=['🥇','🥈','🥉'];
+    document.getElementById('weekly-bars').innerHTML=top10.map(([sym,vol],i)=>{{
+      const pct=Math.max(2,vol/maxV*100);
       return `<div class="wrow">
         <div class="wrank">${{medals[i]||'#'+(i+1)}}</div>
         <div class="wsym" onclick="openDetail('${{sym}}')">${{sym}}</div>
         <div class="wtrack"><div class="wfill" style="width:${{pct}}%">${{fmt(vol)}}</div></div>
       </div>`;
     }}).join('');
-
-  }} catch(e) {{
-    document.getElementById('weekly-bars').innerHTML = '<div class="empty">Error: ' + e.message + '</div>';
-  }}
+  }}catch(e){{document.getElementById('weekly-bars').innerHTML='<div class="empty">Error: '+e.message+'</div>';}}
 }}
 
-// ── HOLDINGS FILTER & TABS ────────────────────────────────────────────────
+// ── HOLDINGS TABS ──────────────────────────────────────────────────────────
 function setStatus(msg,isError=false){{
   const el=document.getElementById('status');
   el.innerHTML=msg;
@@ -1099,26 +1015,23 @@ async function applyFilters(){{
   const dto  =document.getElementById('f-dto').value;
   const minq =parseFloat(document.getElementById('f-minq').value)||null;
   const side =document.getElementById('f-side').value;
-  loading=true;
-  setStatus('Loading <b>'+sym+'</b>…');
+  loading=true; setStatus('Loading <b>'+sym+'</b>…');
   try{{
-    let dq=sb.from('holdings').select('*').eq('symbol',sym).order('date',{{ascending:false}}).order('holding_qty',{{ascending:false}});
+    let dq=sb.from('holdings').select('*').eq('symbol',sym)
+      .order('date',{{ascending:false}}).order('holding_qty',{{ascending:false}});
     if(brk)   dq=dq.eq('broker',parseInt(brk));
     if(dfrom) dq=dq.gte('date',dfrom);
     if(dto)   dq=dq.lte('date',dto);
     if(side==='pos') dq=dq.gt('holding_qty',0);
     if(side==='neg') dq=dq.lt('holding_qty',0);
     dq=dq.limit(5000);
-    const {{data:ddata,error:derr}}=await dq;
-    if(derr) throw derr;
+    const {{data:dd,error:de}}=await dq; if(de) throw de;
     let cq=sb.from('cumulative').select('*').eq('symbol',sym).order('net_holding',{{ascending:false}});
     if(brk)   cq=cq.eq('broker',parseInt(brk));
     if(bname) cq=cq.ilike('broker_name','%'+bname+'%');
-    const {{data:cdata,error:cerr}}=await cq;
-    if(cerr) throw cerr;
-    DAILY=(ddata||[]).filter(r=>!bname||(r.broker_name||'').toLowerCase().includes(bname));
-    CUMUL=cdata||[];
-    FD=[...DAILY];FC=[...CUMUL];
+    const {{data:cd,error:ce}}=await cq; if(ce) throw ce;
+    DAILY=(dd||[]).filter(r=>!bname||(r.broker_name||'').toLowerCase().includes(bname));
+    CUMUL=cd||[]; FD=[...DAILY]; FC=[...CUMUL];
     const net=DAILY.reduce((s,r)=>s+(r.holding_qty||0),0);
     const top=CUMUL.length?CUMUL[0]:null;
     document.getElementById('s-pos').textContent=DAILY.length.toLocaleString();
@@ -1126,8 +1039,7 @@ async function applyFilters(){{
     document.getElementById('s-net').textContent=Math.round(net).toLocaleString();
     document.getElementById('s-top').textContent=top?top.broker:'—';
     document.getElementById('s-top-name').textContent=top?(top.broker_name||''):'by net holding';
-    pg.d=1;pg.c=1;
-    renderD();renderC();renderChart(sym);
+    pg.d=1;pg.c=1;renderD();renderC();renderChart(sym);
     setStatus('<b>'+DAILY.length.toLocaleString()+'</b> daily · <b>'+CUMUL.length+'</b> cumulative for <b>'+sym+'</b>');
   }}catch(e){{setStatus('Error: '+e.message,true);}}
   finally{{loading=false;}}
@@ -1166,11 +1078,11 @@ function renderD(){{
   document.getElementById('pp-d').disabled=pg.d<=1;
   document.getElementById('pn-d').disabled=pg.d>=pages;
   const tb=document.getElementById('tbody-d');
-  if(!sl.length){{tb.innerHTML='<tr><td colspan="10"><div class="empty">No data matches filters.</div></td></tr>';return;}}
+  if(!sl.length){{tb.innerHTML='<tr><td colspan="10"><div class="empty">No data.</div></td></tr>';return;}}
   tb.innerHTML=sl.map(r=>{{
     const hq=r.holding_qty||0,pct=Math.min(100,Math.abs(hq)/maxQ*100);
     const cls=hq>=0?'pos':'neg',fc=hq>=0?'p':'n';
-    return '<tr><td class="m">'+r.date+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m">'+fmt(r.buy_qty)+'</td><td class="m">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.ipo_sale_qty)+'</span></td><td class="m">'+fmt(r.bulk_sale_qty)+'</td><td><div class="qcell"><span class="'+cls+'">'+fmt(hq)+'</span><div class="qbar"><div class="qfill '+fc+'" style="width:'+pct+'%"></div></div></div></td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
+    return '<tr><td class="m">'+r.date+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m pos">'+fmt(r.buy_qty)+'</td><td class="m neg">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.ipo_sale_qty)+'</span></td><td class="m">'+fmt(r.bulk_sale_qty)+'</td><td><div class="qcell"><span class="'+cls+'">'+fmt(hq)+'</span><div class="qbar"><div class="qfill '+fc+'" style="width:'+pct+'%"></div></div></div></td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
   }}).join('');
 }}
 
@@ -1190,7 +1102,7 @@ function renderC(){{
   tb.innerHTML=sl.map((r,i)=>{{
     const rank=off+i+1,medal=medals[rank-1]||'#'+rank;
     const nh=r.net_holding||0,cls=nh>=0?'pos':'neg';
-    return '<tr><td class="m" style="color:var(--muted)">'+medal+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m">'+fmt(r.total_buy_qty)+'</td><td class="m">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.total_ipo_qty)+'</span></td><td class="m">'+fmt(r.total_bulk_qty)+'</td><td class="'+cls+'">'+fmt(nh)+'</td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
+    return '<tr><td class="m" style="color:var(--muted)">'+medal+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m pos">'+fmt(r.total_buy_qty)+'</td><td class="m neg">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.total_ipo_qty)+'</span></td><td class="m">'+fmt(r.total_bulk_qty)+'</td><td class="'+cls+'">'+fmt(nh)+'</td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
   }}).join('');
 }}
 
@@ -1209,20 +1121,28 @@ function renderChart(sym){{
 }}
 
 function showTab(name){{
-  ['daily','cumul','topb'].forEach(t=>{{document.getElementById('tab-'+t).style.display=t===name?'':'none';}});
-  document.querySelectorAll('.tab').forEach((el,i)=>{{el.classList.toggle('active',['daily','cumul','topb'][i]===name);}});
+  ['daily','cumul','topb','mkt'].forEach(t=>{{
+    document.getElementById('tab-'+t).style.display=t===name?'':'none';
+  }});
+  document.querySelectorAll('.tab').forEach((el,i)=>{{
+    el.classList.toggle('active',['daily','cumul','topb','mkt'][i]===name);
+  }});
   if(name==='topb') renderChart(document.getElementById('f-sym').value);
+  if(name==='mkt')  loadMarketSummary();
 }}
 function chpg(dir,t){{pg[t]+=dir;if(t==='d')renderD();else renderC();window.scrollTo({{top:0,behavior:'smooth'}});}}
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 async function init(){{
-  // Load symbols for dropdown
+  TODAY_STR = getToday();
+  document.getElementById('today-lbl').textContent = TODAY_STR;
+  document.getElementById('gen-at').textContent    = new Date().toLocaleTimeString();
+
   try{{
     let allSymbols=[],offset=0,limit=1000;
     while(true){{
       const r=await fetch(SUPABASE_URL+'/rest/v1/cumulative?select=symbol&order=symbol.asc&limit='+limit+'&offset='+offset,
-        {{headers:{{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Accept':'application/json'}}}});
+        {{headers:{{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}}}});
       if(!r.ok) break;
       const data=await r.json();
       if(!data.length) break;
@@ -1235,9 +1155,6 @@ async function init(){{
     while(sel.options.length>1) sel.remove(1);
     symbols.forEach(s=>{{sel.add(new Option(s,s));}});
   }}catch(e){{console.error('Symbol load error:',e);}}
-
-  // Load market summary automatically
-  await loadMarketSummary();
 }}
 
 init();
