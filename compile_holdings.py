@@ -764,11 +764,12 @@ async function loadMarketSummary(){{
   document.getElementById('ms-date-label').textContent = 'Today: ' + TODAY_STR;
 
   try {{
-    // Fetch all holdings for today
+    // Fetch ALL holdings for today — paginate to get everything
     let allRows=[], offset=0, limit=1000;
     while(true){{
-      const {{data,error}} = await sb.from('holdings').select('*')
-        .eq('date', TODAY_STR).range(offset, offset+limit-1);
+      const {{data,error}} = await sb.from('holdings').select(
+        'symbol,security_name,broker,broker_name,buy_qty,total_sale_qty,holding_qty,avg_rate'
+      ).eq('date', TODAY_STR).range(offset, offset+limit-1);
       if(error) throw error;
       allRows.push(...(data||[]));
       if(!data || data.length < limit) break;
@@ -776,70 +777,64 @@ async function loadMarketSummary(){{
     }}
 
     if(!allRows.length){{
-      document.getElementById('spotlight-cards').innerHTML =
-        '<div class="ms-loading">No data for today (' + TODAY_STR + '). Market may be closed or data not yet fetched.</div>';
-      document.getElementById('vol-tbody').innerHTML =
-        '<tr><td colspan="10"><div class="empty">No data for today.</div></td></tr>';
-      document.getElementById('weekly-bars').innerHTML =
-        '<div class="ms-loading">No recent data available.</div>';
+      const msg = '<div class="ms-loading">No data for today (' + TODAY_STR + '). Market may be closed or data not yet fetched.</div>';
+      document.getElementById('spotlight-cards').innerHTML = msg;
+      document.getElementById('vol-tbody').innerHTML = '<tr><td colspan="9"><div class="empty">No data for today.</div></td></tr>';
+      document.getElementById('weekly-bars').innerHTML = '<div class="empty">No recent data.</div>';
       return;
     }}
 
-    // ── Aggregate by symbol ──────────────────────────────────────────────
+    // ── Aggregate by symbol — all figures from today's holdings rows ─────
     const symMap = {{}};
     for(const r of allRows){{
       const s = r.symbol;
       if(!symMap[s]) symMap[s] = {{
-        symbol:s, security_name:r.security_name||s,
-        buy_qty:0, total_sale_qty:0, volume:0,
-        brokers:[], buy_brokers:{{}}, sell_brokers:{{}}
+        symbol        : s,
+        security_name : r.security_name || s,
+        buy_qty       : 0,
+        total_sale_qty: 0,
+        // for finding top broker per metric
+        brokers       : []
       }};
-      const sm = symMap[s];
-      sm.buy_qty        += (r.buy_qty||0);
-      sm.total_sale_qty += (r.total_sale_qty||0);
-      sm.volume         += (r.buy_qty||0) + (r.total_sale_qty||0);
-      sm.brokers.push(r);
-      // track top buyer
-      if(!sm.buy_brokers[r.broker]) sm.buy_brokers[r.broker]={{broker:r.broker,name:r.broker_name||'',qty:0}};
-      sm.buy_brokers[r.broker].qty += (r.buy_qty||0);
-      // track top seller
-      if(!sm.sell_brokers[r.broker]) sm.sell_brokers[r.broker]={{broker:r.broker,name:r.broker_name||'',qty:0}};
-      sm.sell_brokers[r.broker].qty += (r.total_sale_qty||0);
+      symMap[s].buy_qty         += (r.buy_qty        || 0);
+      symMap[s].total_sale_qty  += (r.total_sale_qty || 0);
+      symMap[s].brokers.push(r);
     }}
 
-    // Fetch cumulative for top holder
-    const symbols = Object.keys(symMap);
-    const {{data:cData}} = await sb.from('cumulative').select('symbol,broker,broker_name,net_holding,avg_rate')
-      .in('symbol', symbols.slice(0,50));
-    const cumBySymbol = {{}};
-    for(const r of (cData||[])){{
-      if(!cumBySymbol[r.symbol] || r.net_holding > cumBySymbol[r.symbol].net_holding)
-        cumBySymbol[r.symbol] = r;
-    }}
-
-    // Build VOL_DATA sorted by volume desc
+    // For each symbol find top buyer, top seller, top holder — all from today
     VOL_DATA = Object.values(symMap).map(sm => {{
-      const topBuyer  = Object.values(sm.buy_brokers).sort((a,b)=>b.qty-a.qty)[0]||{{}};
-      const topSeller = Object.values(sm.sell_brokers).sort((a,b)=>b.qty-a.qty)[0]||{{}};
-      const topHolder = cumBySymbol[sm.symbol]||{{}};
+      const brokers = sm.brokers;
+
+      // Top buyer = broker with highest buy_qty today
+      const topBuyer = brokers.reduce((best,r) =>
+        (r.buy_qty||0) > (best.buy_qty||0) ? r : best, brokers[0]);
+
+      // Top seller = broker with highest total_sale_qty today
+      const topSeller = brokers.reduce((best,r) =>
+        (r.total_sale_qty||0) > (best.total_sale_qty||0) ? r : best, brokers[0]);
+
+      // Top holder = broker with highest holding_qty today
+      const topHolder = brokers.reduce((best,r) =>
+        (r.holding_qty||0) > (best.holding_qty||0) ? r : best, brokers[0]);
+
       return {{
-        symbol       : sm.symbol,
-        security_name: sm.security_name,
-        buy_qty      : sm.buy_qty,
-        total_sale_qty: sm.total_sale_qty,
-        volume       : sm.volume,
-        top_buyer    : topBuyer.broker||'—',
-        top_buyer_name: topBuyer.name||'',
-        top_buyer_qty: topBuyer.qty||0,
-        top_seller   : topSeller.broker||'—',
-        top_seller_name: topSeller.name||'',
-        top_seller_qty: topSeller.qty||0,
-        top_holder   : topHolder.broker||'—',
-        top_holder_name: topHolder.broker_name||'',
-        top_holder_qty: topHolder.net_holding||0,
-        avg_rate     : topHolder.avg_rate||0,
+        symbol         : sm.symbol,
+        security_name  : sm.security_name,
+        volume         : sm.buy_qty,            // volume = buy_qty only
+        buy_qty        : sm.buy_qty,
+        total_sale_qty : sm.total_sale_qty,
+        top_buyer      : topBuyer.broker     || '—',
+        top_buyer_name : topBuyer.broker_name|| '',
+        top_buyer_qty  : topBuyer.buy_qty    || 0,
+        top_seller     : topSeller.broker     || '—',
+        top_seller_name: topSeller.broker_name|| '',
+        top_seller_qty : topSeller.total_sale_qty || 0,
+        top_holder     : topHolder.broker     || '—',
+        top_holder_name: topHolder.broker_name|| '',
+        top_holder_qty : topHolder.holding_qty|| 0,
+        avg_rate       : topHolder.avg_rate   || 0,  // avg_rate of top holder
       }};
-    }}).sort((a,b)=>b.volume-a.volume);
+    }}).sort((a,b) => b.volume - a.volume);
 
     renderVolTable();
     renderSpotlight();
@@ -848,29 +843,29 @@ async function loadMarketSummary(){{
   }} catch(e) {{
     console.error('Market summary error:', e);
     document.getElementById('spotlight-cards').innerHTML =
-      '<div class="ms-loading">Error loading market data: ' + e.message + '</div>';
+      '<div class="ms-loading">Error: ' + e.message + '</div>';
   }}
 }}
 
 function renderSpotlight(){{
   if(!VOL_DATA.length) return;
-  const top = VOL_DATA[0];
+  const top = VOL_DATA[0];  // highest volume script today
   document.getElementById('spotlight-cards').innerHTML = `
     <div class="spotlight-grid">
       <div class="sp-card buy" onclick="openDetail('${{top.symbol}}')">
-        <div class="sp-label">Top buyer — ${{top.symbol}}</div>
+        <div class="sp-label">Top buyer today — ${{top.symbol}}</div>
         <div class="sp-sym buy">Broker ${{top.top_buyer}}</div>
         <div class="sp-name">${{top.top_buyer_name||'—'}}</div>
         <div class="sp-qty">Bought ${{fmt(top.top_buyer_qty)}} shares</div>
       </div>
       <div class="sp-card sell" onclick="openDetail('${{top.symbol}}')">
-        <div class="sp-label">Top seller — ${{top.symbol}}</div>
+        <div class="sp-label">Top seller today — ${{top.symbol}}</div>
         <div class="sp-sym sell">Broker ${{top.top_seller}}</div>
         <div class="sp-name">${{top.top_seller_name||'—'}}</div>
         <div class="sp-qty">Sold ${{fmt(top.top_seller_qty)}} shares</div>
       </div>
       <div class="sp-card hold" onclick="openDetail('${{top.symbol}}')">
-        <div class="sp-label">Top holder — ${{top.symbol}}</div>
+        <div class="sp-label">Top holder today — ${{top.symbol}}</div>
         <div class="sp-sym hold">Broker ${{top.top_holder}}</div>
         <div class="sp-name">${{top.top_holder_name||'—'}}</div>
         <div class="sp-qty">Holds ${{fmt(top.top_holder_qty)}} shares</div>
@@ -878,7 +873,7 @@ function renderSpotlight(){{
       <div class="sp-card rate" onclick="openDetail('${{top.symbol}}')">
         <div class="sp-label">Avg rate of top holder</div>
         <div class="sp-sym rate">Rs ${{fmtf(top.avg_rate)}}</div>
-        <div class="sp-name">Cost per share held</div>
+        <div class="sp-name">Broker ${{top.top_holder}} · ${{top.top_holder_name||''}}</div>
         <div class="sp-qty">Highest traded: ${{top.symbol}}</div>
       </div>
     </div>`;
@@ -901,8 +896,8 @@ function renderVolTable(){{
   const maxV = data.length ? data[0].volume : 1;
   document.getElementById('vol-cnt').textContent = data.length + ' symbols';
   const tb = document.getElementById('vol-tbody');
-  if(!data.length){{tb.innerHTML='<tr><td colspan="10"><div class="empty">No data.</div></td></tr>';return;}}
-  tb.innerHTML = data.map((r,i)=>{{
+  if(!data.length){{tb.innerHTML='<tr><td colspan="9"><div class="empty">No data.</div></td></tr>';return;}}
+  tb.innerHTML = data.map((r,i) => {{
     const pct = Math.max(2, r.volume/maxV*80);
     return `<tr onclick="openDetail('${{r.symbol}}')">
       <td>${{rankBadge(i+1)}}</td>
@@ -926,85 +921,92 @@ async function openDetail(sym){{
   document.getElementById('dp-sym2').textContent = sym;
   panel.classList.add('open');
   panel.scrollIntoView({{behavior:'smooth', block:'start'}});
-  document.getElementById('dp-tbody').innerHTML = '<tr><td colspan="9"><div class="empty"><div class="spinner" style="margin:0 auto 8px"></div>Loading…</div></td></tr>';
+  document.getElementById('dp-tbody').innerHTML =
+    '<tr><td colspan="9"><div class="empty"><div class="spinner" style="margin:0 auto 8px"></div>Loading…</div></td></tr>';
 
   try {{
-    // Fetch all historical holdings for this symbol
+    // Fetch ALL historical holdings for this symbol
     let allRows=[], offset=0, limit=1000;
     while(true){{
-      const {{data,error}} = await sb.from('holdings').select('*').eq('symbol',sym).range(offset,offset+limit-1);
+      const {{data,error}} = await sb.from('holdings').select(
+        'date,broker,broker_name,buy_qty,total_sale_qty,holding_qty,avg_rate'
+      ).eq('symbol', sym).range(offset, offset+limit-1);
       if(error) throw error;
       allRows.push(...(data||[]));
       if(!data||data.length<limit) break;
       offset+=limit;
     }}
 
-    // Fetch cumulative top holder
-    const {{data:cData}} = await sb.from('cumulative').select('broker,broker_name,net_holding,avg_rate')
-      .eq('symbol',sym).order('net_holding',{{ascending:false}}).limit(1);
-    const topHolder = (cData&&cData[0])||{{}};
-
-    // Aggregate by date
-    const dateMap={{}};
-    for(const r of allRows){{
-      const d=r.date;
-      if(!dateMap[d]) dateMap[d]={{
-        date:d, buy_qty:0, total_sale_qty:0, volume:0,
-        buy_brokers:{{}}, sell_brokers:{{}}
-      }};
-      const dm=dateMap[d];
-      dm.buy_qty         += (r.buy_qty||0);
-      dm.total_sale_qty  += (r.total_sale_qty||0);
-      dm.volume          += (r.buy_qty||0)+(r.total_sale_qty||0);
-      if(!dm.buy_brokers[r.broker])  dm.buy_brokers[r.broker]  ={{broker:r.broker,name:r.broker_name||'',qty:0}};
-      if(!dm.sell_brokers[r.broker]) dm.sell_brokers[r.broker] ={{broker:r.broker,name:r.broker_name||'',qty:0}};
-      dm.buy_brokers[r.broker].qty  += (r.buy_qty||0);
-      dm.sell_brokers[r.broker].qty += (r.total_sale_qty||0);
+    if(!allRows.length){{
+      document.getElementById('dp-tbody').innerHTML =
+        '<tr><td colspan="9"><div class="empty">No data found for ' + sym + '</div></td></tr>';
+      return;
     }}
 
-    // Sort dates and assign daily ranks by volume
-    DETAIL_DATA = Object.values(dateMap).map(dm=>{{
-      const tb = Object.values(dm.buy_brokers).sort((a,b)=>b.qty-a.qty)[0]||{{}};
-      const ts = Object.values(dm.sell_brokers).sort((a,b)=>b.qty-a.qty)[0]||{{}};
-      return {{
-        date            : dm.date,
-        volume          : dm.volume,
-        buy_qty         : dm.buy_qty,
-        total_sale_qty  : dm.total_sale_qty,
-        top_buyer       : tb.broker||'—',
-        top_buyer_name  : tb.name||'',
-        top_seller      : ts.broker||'—',
-        top_seller_name : ts.name||'',
-        top_holder      : topHolder.broker||'—',
-        top_holder_name : topHolder.broker_name||'',
-        avg_rate        : topHolder.avg_rate||0,
-      }};
-    }}).sort((a,b)=>b.volume-a.volume);
+    // ── Aggregate by date — find top buyer/seller/holder PER DATE ─────────
+    const dateMap = {{}};
+    for(const r of allRows){{
+      const d = r.date;
+      if(!dateMap[d]) dateMap[d] = {{ date:d, brokers:[], buy_qty:0, total_sale_qty:0 }};
+      dateMap[d].buy_qty        += (r.buy_qty        || 0);
+      dateMap[d].total_sale_qty += (r.total_sale_qty || 0);
+      dateMap[d].brokers.push(r);
+    }}
 
-    // Assign ranks
-    const volRanked = [...DETAIL_DATA].sort((a,b)=>b.volume-a.volume);
-    const rankMap={{}};
-    volRanked.forEach((r,i)=>rankMap[r.date]=i+1);
-    DETAIL_DATA.forEach(r=>r.rank=rankMap[r.date]);
+    DETAIL_DATA = Object.values(dateMap).map(dm => {{
+      const brokers = dm.brokers;
+
+      // Top buyer = highest buy_qty on this date
+      const tb = brokers.reduce((b,r)=>(r.buy_qty||0)>(b.buy_qty||0)?r:b, brokers[0]);
+      // Top seller = highest total_sale_qty on this date
+      const ts = brokers.reduce((b,r)=>(r.total_sale_qty||0)>(b.total_sale_qty||0)?r:b, brokers[0]);
+      // Top holder = highest holding_qty on this date
+      const th = brokers.reduce((b,r)=>(r.holding_qty||0)>(b.holding_qty||0)?r:b, brokers[0]);
+
+      return {{
+        date           : dm.date,
+        volume         : dm.buy_qty,               // volume = buy_qty
+        buy_qty        : dm.buy_qty,
+        total_sale_qty : dm.total_sale_qty,
+        top_buyer      : tb.broker      || '—',
+        top_buyer_name : tb.broker_name || '',
+        top_seller     : ts.broker      || '—',
+        top_seller_name: ts.broker_name || '',
+        top_holder     : th.broker      || '—',
+        top_holder_name: th.broker_name || '',
+        avg_rate       : th.avg_rate    || 0,      // avg_rate of top holder on this date
+      }};
+    }});
+
+    // Assign daily rank by volume (buy_qty) desc
+    const sorted = [...DETAIL_DATA].sort((a,b) => b.volume - a.volume);
+    sorted.forEach((r,i) => r.rank = i+1);
+    // preserve rank on original objects
+    const rankByDate = {{}};
+    sorted.forEach(r => rankByDate[r.date] = r.rank);
+    DETAIL_DATA.forEach(r => r.rank = rankByDate[r.date]);
 
     // Summary stats
-    const totalVol = DETAIL_DATA.reduce((s,r)=>s+r.volume,0);
-    const totalBuy = DETAIL_DATA.reduce((s,r)=>s+r.buy_qty,0);
-    const totalSell= DETAIL_DATA.reduce((s,r)=>s+r.total_sale_qty,0);
+    const totalVol  = DETAIL_DATA.reduce((s,r)=>s+r.volume,0);
+    const totalBuy  = DETAIL_DATA.reduce((s,r)=>s+r.buy_qty,0);
+    const totalSell = DETAIL_DATA.reduce((s,r)=>s+r.total_sale_qty,0);
+    const topDate   = sorted[0];
+
     document.getElementById('dp-stats').innerHTML = `
       <div class="dp-stat"><div class="dp-stat-label">Trading Days</div><div class="dp-stat-val c">${{DETAIL_DATA.length}}</div></div>
       <div class="dp-stat"><div class="dp-stat-label">Total Volume</div><div class="dp-stat-val c">${{fmt(totalVol)}}</div></div>
       <div class="dp-stat"><div class="dp-stat-label">Total Bought</div><div class="dp-stat-val g">${{fmt(totalBuy)}}</div></div>
       <div class="dp-stat"><div class="dp-stat-label">Total Sold</div><div class="dp-stat-val r">${{fmt(totalSell)}}</div></div>
-      <div class="dp-stat"><div class="dp-stat-label">Top Holder</div><div class="dp-stat-val g">Broker ${{topHolder.broker||'—'}}</div></div>
-      <div class="dp-stat"><div class="dp-stat-label">Avg Rate</div><div class="dp-stat-val a">Rs ${{fmtf(topHolder.avg_rate||0)}}</div></div>`;
+      <div class="dp-stat"><div class="dp-stat-label">Highest Vol Date</div><div class="dp-stat-val a">${{topDate?topDate.date:'—'}}</div></div>
+      <div class="dp-stat"><div class="dp-stat-label">Highest Vol Qty</div><div class="dp-stat-val c">${{topDate?fmt(topDate.volume):'—'}}</div></div>`;
 
     document.getElementById('dp-cnt').textContent = DETAIL_DATA.length + ' trading days';
     renderDetailTable();
 
   }} catch(e) {{
+    console.error('Detail error:', e);
     document.getElementById('dp-tbody').innerHTML =
-      '<tr><td colspan="9"><div class="empty">Error: '+e.message+'</div></td></tr>';
+      '<tr><td colspan="9"><div class="empty">Error: ' + e.message + '</div></td></tr>';
   }}
 }}
 
@@ -1015,16 +1017,16 @@ function sortDetail(col){{
 
 function renderDetailTable(){{
   const data = doSortVol(DETAIL_DATA, detCol, detAsc);
-  document.getElementById('dp-tbody').innerHTML = data.map(r=>
+  document.getElementById('dp-tbody').innerHTML = data.map(r =>
     `<tr>
       <td class="m">${{r.date}}</td>
       <td>${{rankBadge(r.rank)}}</td>
       <td class="m">${{fmt(r.volume)}}</td>
       <td class="pos">${{fmt(r.buy_qty)}}</td>
       <td class="neg">${{fmt(r.total_sale_qty)}}</td>
-      <td><span class="brk">${{r.top_buyer}}</span></td>
-      <td><span class="brk sell">${{r.top_seller}}</span></td>
-      <td><span class="brk hold">${{r.top_holder}}</span></td>
+      <td><span class="brk">${{r.top_buyer}}</span><div class="bname">${{r.top_buyer_name}}</div></td>
+      <td><span class="brk sell">${{r.top_seller}}</span><div class="bname">${{r.top_seller_name}}</div></td>
+      <td><span class="brk hold">${{r.top_holder}}</span><div class="bname">${{r.top_holder_name}}</div></td>
       <td class="m" style="color:var(--amber)">Rs ${{fmtf(r.avg_rate)}}</td>
     </tr>`).join('');
 }}
@@ -1037,9 +1039,10 @@ function closeDetail(){{
 async function loadWeekly(){{
   const days = getLast5TradingDays();
   try {{
+    // Fetch buy_qty for last 5 trading days — volume = buy_qty only
     let allRows=[], offset=0, limit=1000;
     while(true){{
-      const {{data,error}} = await sb.from('holdings').select('symbol,buy_qty,total_sale_qty')
+      const {{data,error}} = await sb.from('holdings').select('symbol,buy_qty')
         .in('date', days).range(offset, offset+limit-1);
       if(error) throw error;
       allRows.push(...(data||[]));
@@ -1047,23 +1050,24 @@ async function loadWeekly(){{
       offset+=limit;
     }}
 
-    const symVol={{}};
+    // Sum buy_qty per symbol across all 5 days
+    const symVol = {{}};
     for(const r of allRows){{
-      if(!symVol[r.symbol]) symVol[r.symbol]=0;
-      symVol[r.symbol] += (r.buy_qty||0)+(r.total_sale_qty||0);
+      if(!symVol[r.symbol]) symVol[r.symbol] = 0;
+      symVol[r.symbol] += (r.buy_qty || 0);
     }}
 
     const top10 = Object.entries(symVol)
-      .sort((a,b)=>b[1]-a[1]).slice(0,10);
+      .sort((a,b) => b[1]-a[1]).slice(0,10);
 
     if(!top10.length){{
-      document.getElementById('weekly-bars').innerHTML='<div class="empty">No weekly data available.</div>';
+      document.getElementById('weekly-bars').innerHTML = '<div class="empty">No weekly data.</div>';
       return;
     }}
 
     const maxV = top10[0][1];
-    const medals=['🥇','🥈','🥉'];
-    document.getElementById('weekly-bars').innerHTML = top10.map(([sym,vol],i)=>{{
+    const medals = ['🥇','🥈','🥉'];
+    document.getElementById('weekly-bars').innerHTML = top10.map(([sym,vol],i) => {{
       const pct = Math.max(2, vol/maxV*100);
       return `<div class="wrow">
         <div class="wrank">${{medals[i]||'#'+(i+1)}}</div>
@@ -1073,7 +1077,7 @@ async function loadWeekly(){{
     }}).join('');
 
   }} catch(e) {{
-    document.getElementById('weekly-bars').innerHTML='<div class="empty">Error loading weekly data: '+e.message+'</div>';
+    document.getElementById('weekly-bars').innerHTML = '<div class="empty">Error: ' + e.message + '</div>';
   }}
 }}
 
