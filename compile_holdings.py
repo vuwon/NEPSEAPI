@@ -736,7 +736,19 @@ async function loadMarketSummary(){{
   document.getElementById('gen-at').textContent    = new Date().toLocaleTimeString();
 
   try{{
-    // Paginate to fetch ALL today's holdings
+    // ── Find the most recent date with actual data ─────────────────
+    const {{data:ld, error:le}} = await sb.from('holdings')
+      .select('date').order('date', {{ascending:false}}).limit(1);
+    if(le) throw le;
+    const LATEST_DATE = (ld && ld.length) ? ld[0].date : TODAY_STR;
+    const isToday = LATEST_DATE === TODAY_STR;
+    const dateLabel = isToday
+      ? 'Today — ' + LATEST_DATE
+      : 'Latest trading day — ' + LATEST_DATE + ' (market closed today)';
+    document.getElementById('ms-title').textContent = dateLabel + ' · Loading…';
+    TODAY_STR = LATEST_DATE;  // use latest date for all queries below
+
+    // ── Fetch ALL holdings for latest date ─────────────────────────
     let allRows=[], offset=0, limit=1000;
     while(true){{
       const {{data,error}}=await sb.from('holdings')
@@ -749,12 +761,10 @@ async function loadMarketSummary(){{
     }}
 
     if(!allRows.length){{
-      document.getElementById('spotlight-wrap').innerHTML=
-        '<div class="empty">No data for today ('+TODAY_STR+'). Market may be closed.</div>';
-      document.getElementById('vol-tbody').innerHTML=
-        '<tr><td colspan="9"><div class="empty">No data for today.</div></td></tr>';
+      document.getElementById('spotlight-wrap').innerHTML='<div class="empty">No data available.</div>';
+      document.getElementById('vol-tbody').innerHTML='<tr><td colspan="9"><div class="empty">No data available.</div></td></tr>';
       document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';
-      document.getElementById('ms-title').textContent='No market data for today ('+TODAY_STR+')';
+      document.getElementById('ms-title').textContent='No data available.';
       return;
     }}
 
@@ -792,7 +802,7 @@ async function loadMarketSummary(){{
     }}).sort((a,b)=>b.volume-a.volume);
 
     document.getElementById('ms-title').textContent =
-      'Today — ' + TODAY_STR + ' · ' + VOL_DATA.length + ' symbols traded';
+      dateLabel.replace(' · Loading…','') + ' · ' + VOL_DATA.length + ' symbols traded';
     renderSpotlight();
     renderVolTable();
     await loadWeekly();
@@ -849,7 +859,7 @@ function renderVolTable(){{
   const data=doSort2(VOL_DATA,volCol,volAsc);
   const maxV=data.length?data[0].volume:1;
   document.getElementById('vol-cnt').textContent=data.length+' symbols';
-  document.getElementById('vol-table-title').textContent='Top scripts by volume — '+TODAY_STR;
+  document.getElementById('vol-table-title').textContent='Top scripts by volume — '+TODAY_STR+' (buy qty)';
   const tb=document.getElementById('vol-tbody');
   if(!data.length){{tb.innerHTML='<tr><td colspan="9"><div class="empty">No data.</div></td></tr>';return;}}
   tb.innerHTML=data.map((r,i)=>{{
