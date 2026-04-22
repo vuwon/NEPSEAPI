@@ -190,6 +190,127 @@ def aggregate_one_file(df):
     return h
 
 
+def compute_daily_volume(df):
+    """
+    Compute accurate daily volume per symbol from raw transactions.
+    Called BEFORE dropping zero holdings — captures ALL brokers.
+    Returns: DataFrame with one row per (Date, Stock Symbol)
+    """
+    grp = ["Date", "Stock Symbol"]
+
+    # Total buy per symbol per date (sum across ALL brokers)
+    buy_vol = (df.groupby(grp + ["Buyer"])["Quantity"].sum()
+                 .reset_index().rename(columns={"Buyer":"broker","Quantity":"buy_qty"}))
+
+    # Total sell per symbol per date
+    sell_vol = (df.groupby(grp + ["Seller"])["Quantity"].sum()
+                  .reset_index().rename(columns={"Seller":"broker","Quantity":"sel_qty"}))
+
+    # Symbol-level totals
+    sym_buy = buy_vol.groupby(grp)["buy_qty"].sum().reset_index()
+    sym_sel = sell_vol.groupby(grp)["sel_qty"].sum().reset_index()
+    vol = sym_buy.merge(sym_sel, on=grp, how="outer").fillna(0)
+    vol["total_volume"] = vol["buy_qty"] + vol["sel_qty"]
+
+    # Top buyer per symbol per date
+    top_buy = (buy_vol.sort_values("buy_qty", ascending=False)
+                      .groupby(grp).first().reset_index()
+                      .rename(columns={"broker":"top_buyer","buy_qty":"top_buyer_qty"}))
+
+    # Top seller per symbol per date
+    top_sel = (sell_vol.sort_values("sel_qty", ascending=False)
+                       .groupby(grp).first().reset_index()
+                       .rename(columns={"broker":"top_seller","sel_qty":"top_seller_qty"}))
+
+    vol = vol.merge(top_buy[grp+["top_buyer","top_buyer_qty"]], on=grp, how="left")
+    vol = vol.merge(top_sel[grp+["top_seller","top_seller_qty"]], on=grp, how="left")
+
+    # Add broker names if available
+    if "BuyerName" in df.columns:
+        bnames = df[["Buyer","BuyerName"]].drop_duplicates().rename(
+            columns={"Buyer":"top_buyer","BuyerName":"top_buyer_name"})
+        vol = vol.merge(bnames, on="top_buyer", how="left")
+    if "SellerName" in df.columns:
+        snames = df[["Seller","SellerName"]].drop_duplicates().rename(
+            columns={"Seller":"top_seller","SellerName":"top_seller_name"})
+        vol = vol.merge(snames, on="top_seller", how="left")
+    if "Security Name" in df.columns:
+        secnames = df[["Stock Symbol","Security Name"]].drop_duplicates()
+        vol = vol.merge(secnames, on="Stock Symbol", how="left")
+
+    for col in ["top_buyer_name","top_seller_name","Security Name"]:
+        if col not in vol.columns:
+            vol[col] = ""
+        vol[col] = vol[col].fillna("")
+
+    vol["top_buyer"]  = vol["top_buyer"].fillna(0).astype(int)
+    vol["top_seller"] = vol["top_seller"].fillna(0).astype(int)
+
+    return vol
+
+
+def upsert_daily_volume(supabase, vol_df, h_df):
+    """
+    Upsert daily_volume table.
+    vol_df = from compute_daily_volume (raw counts, all brokers)
+    h_df   = aggregated holdings (for top holder — highest holding_qty)
+    """
+    CHUNK = 200
+
+    # Get top holder per symbol per date from holdings
+    if not h_df.empty:
+        top_hold = (h_df.sort_values("holding_qty", ascending=False)
+                        .groupby(["Date","Stock Symbol"]).first()
+                        .reset_index()[["Date","Stock Symbol","broker",
+                                        "broker_name","holding_qty","avg_rate"]]
+                        .rename(columns={
+                            "broker"      : "top_holder",
+                            "broker_name" : "top_holder_name",
+                            "holding_qty" : "top_holder_qty",
+                            "avg_rate"    : "top_holder_rate",
+                        }))
+        vol_df = vol_df.merge(
+            top_hold,
+            left_on=["Date","Stock Symbol"],
+            right_on=["Date","Stock Symbol"],
+            how="left"
+        )
+    for col in ["top_holder","top_holder_qty","top_holder_rate"]:
+        if col not in vol_df.columns:
+            vol_df[col] = 0
+    if "top_holder_name" not in vol_df.columns:
+        vol_df["top_holder_name"] = ""
+    vol_df["top_holder"]      = vol_df["top_holder"].fillna(0).astype(int)
+    vol_df["top_holder_qty"]  = vol_df["top_holder_qty"].fillna(0)
+    vol_df["top_holder_rate"] = vol_df["top_holder_rate"].fillna(0)
+    vol_df["top_holder_name"] = vol_df["top_holder_name"].fillna("")
+
+    rows = [{
+        "date"            : str(r["Date"]),
+        "symbol"          : str(r["Stock Symbol"]),
+        "security_name"   : str(r.get("Security Name", "")),
+        "total_buy_qty"   : int(r["buy_qty"]),
+        "total_sel_qty"   : int(r["sel_qty"]),
+        "total_volume"    : int(r["total_volume"]),
+        "top_buyer"       : int(r["top_buyer"]),
+        "top_buyer_name"  : str(r.get("top_buyer_name","")),
+        "top_buyer_qty"   : int(r["top_buyer_qty"]),
+        "top_seller"      : int(r["top_seller"]),
+        "top_seller_name" : str(r.get("top_seller_name","")),
+        "top_seller_qty"  : int(r["top_seller_qty"]),
+        "top_holder"      : int(r["top_holder"]),
+        "top_holder_name" : str(r.get("top_holder_name","")),
+        "top_holder_qty"  : int(r["top_holder_qty"]),
+        "top_holder_rate" : float(round(r["top_holder_rate"], 2)),
+        "updated_at"      : datetime.now().isoformat(),
+    } for _, r in vol_df.iterrows()]
+
+    for i in range(0, len(rows), CHUNK):
+        supabase.upsert("daily_volume", rows[i:i+CHUNK], on_conflict="date,symbol")
+
+    print(f"      Volume: {len(rows):,} symbol-days upserted to daily_volume")
+
+
 def upsert_file_to_supabase(supabase: SupabaseClient, h: pd.DataFrame,
                              broker_names: pd.DataFrame, sec_names: pd.DataFrame,
                              file_label: str):
@@ -328,9 +449,11 @@ def main():
 
     print(f"\nFound {len(files)} file(s) — processing one at a time:\n")
     broker_names = pd.DataFrame(columns=["broker","broker_name"])
-    sec_names    = pd.DataFrame(columns=["Stock Symbol","Security Name"])
-    all_symbols  = set()
-
+    broker_names    = pd.DataFrame(columns=["broker","broker_name"])
+    sec_names       = pd.DataFrame(columns=["Stock Symbol","Security Name"])
+    all_symbols     = set()
+    vol_frames      = []
+    agg_frames_copy = []
     print("Uploading to Supabase...")
     for i, fpath in enumerate(files, 1):
         t1 = time.time()
@@ -340,7 +463,10 @@ def main():
         if df is None:
             continue
 
-        # Aggregate this file
+        # Compute volume BEFORE aggregation — captures ALL brokers including zero-holding
+        vol = compute_daily_volume(df)
+
+        # Aggregate holdings
         agg = aggregate_one_file(df)
 
         # Collect name lookups
@@ -351,11 +477,44 @@ def main():
 
         del df  # free raw data immediately
 
-        # Upsert this file's data to Supabase right away
+        # Keep small copy for top holder lookup in daily_volume
+        agg_frames_copy.append(
+            agg[["Date","Stock Symbol","broker","broker_name","holding_qty","avg_rate"]].copy()
+        )
+        vol_frames.append(vol)
+
+        # Upsert this file's holdings data to Supabase right away
         syms = upsert_file_to_supabase(supabase, agg, broker_names, sec_names, fname)
         all_symbols.update(syms)
         del agg  # free aggregated data immediately
         print(f"      Done in {time.time()-t1:.1f}s")
+
+    # ── Upsert accurate daily volumes ────────────────────────────────
+    print("\nUpserting daily_volume table...")
+    if vol_frames:
+        all_vol = pd.concat(vol_frames, ignore_index=True)
+        # Re-aggregate: pick top buyer/seller by max qty per date+symbol
+        sym_buy = all_vol.groupby(["Date","Stock Symbol"])["buy_qty"].sum().reset_index()
+        sym_sel = all_vol.groupby(["Date","Stock Symbol"])["sel_qty"].sum().reset_index()
+        sym_vol = sym_buy.merge(sym_sel, on=["Date","Stock Symbol"], how="outer").fillna(0)
+        sym_vol["total_volume"] = sym_vol["buy_qty"] + sym_vol["sel_qty"]
+        # top buyer: broker with most buy_qty across all files for that date+symbol
+        top_b = (all_vol.sort_values("top_buyer_qty",ascending=False)
+                        .groupby(["Date","Stock Symbol"]).first()
+                        .reset_index()[["Date","Stock Symbol","top_buyer","top_buyer_name","top_buyer_qty"]])
+        top_s = (all_vol.sort_values("top_seller_qty",ascending=False)
+                        .groupby(["Date","Stock Symbol"]).first()
+                        .reset_index()[["Date","Stock Symbol","top_seller","top_seller_name","top_seller_qty"]])
+        sym_vol = sym_vol.merge(top_b, on=["Date","Stock Symbol"], how="left")
+        sym_vol = sym_vol.merge(top_s, on=["Date","Stock Symbol"], how="left")
+        if "Security Name" in all_vol.columns:
+            sn = all_vol[["Stock Symbol","Security Name"]].drop_duplicates()
+            sym_vol = sym_vol.merge(sn, on="Stock Symbol", how="left")
+        del all_vol
+        # Build a combined agg df for top holder lookup
+        all_agg = pd.concat(agg_frames_copy, ignore_index=True) if agg_frames_copy else pd.DataFrame()
+        upsert_daily_volume(supabase, sym_vol, all_agg)
+        del sym_vol, all_agg
 
     # ── Recalculate cumulative for all affected symbols ───────────────
     update_cumulative(supabase, all_symbols)
@@ -534,7 +693,7 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
   <!-- FILTERS -->
   <div class="fp">
     <div class="fg"><label>Stock Symbol ★</label>
-      <select id="f-sym"><option value="">-- Select Symbol --</option></select></div>
+      <select id="f-sym"><option value="">-- All Symbols --</option></select></div>
     <div class="fg"><label>Broker #</label><input type="text" id="f-brk" placeholder="e.g. 58"></div>
     <div class="fg"><label>Broker Name</label><input type="text" id="f-bname" placeholder="e.g. Sunrise"></div>
     <div class="fg"><label>Date From</label><input type="date" id="f-dfrom"></div>
@@ -637,13 +796,11 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
         <thead><tr>
           <th>#</th>
           <th>Symbol</th>
-          <th>Security Name</th>
           <th onclick="sortVol('volume')">Volume (Buy Qty) ↕</th>
           <th onclick="sortVol('total_sale_qty')">Sell Qty ↕</th>
           <th onclick="sortVol('top_buyer_qty')">Top Buyer ↕</th>
           <th onclick="sortVol('top_seller_qty')">Top Seller ↕</th>
           <th onclick="sortVol('top_holder_qty')">Top Holder ↕</th>
-          <th onclick="sortVol('avg_rate')">Avg Rate ↕</th>
         </tr></thead>
         <tbody id="vol-tbody"><tr><td colspan="9"><div class="empty"><div class="spinner"></div>Loading…</div></td></tr></tbody>
       </table></div>
@@ -721,11 +878,16 @@ function rankBadge(n){{
   const lbl=n===1?'🥇':n===2?'🥈':n===3?'🥉':n;
   return '<span class="rank-badge '+cls+'">'+lbl+'</span>';
 }}
-function brkCell(broker,name,qty,cls){{
+function brkCell(broker,name,qty,cls,rate){{
   cls=cls||'';
+  const qcls = cls==='sell'?'neg':cls==='hold'?'pos':'';
+  const rateHtml = (rate!==undefined && rate!==null)
+    ? '<div class="m" style="color:var(--amber);font-size:10px">Rs '+fmtf(rate)+'</div>'
+    : '';
   return '<div class="brk-cell"><span class="brk '+cls+'">'+broker+'</span>'
     +'<div class="bname">'+(name||'')+'</div>'
-    +'<div class="m '+(cls==='sell'?'neg':cls==='hold'?'pos':'')+'">'+fmt(qty)+'</div></div>';
+    +'<div class="m '+qcls+'">'+fmt(qty)+'</div>'
+    +rateHtml+'</div>';
 }}
 
 // ── MARKET SUMMARY ─────────────────────────────────────────────────────────
@@ -748,61 +910,49 @@ async function loadMarketSummary(){{
     document.getElementById('ms-title').textContent = dateLabel + ' · Loading…';
     TODAY_STR = LATEST_DATE;  // use latest date for all queries below
 
-    // ── Fetch holdings for latest date (filtered by symbol if selected) ──
+    // ── Query daily_volume table — accurate counts from ALL brokers ────
     const mktSym = document.getElementById('f-sym').value.trim();
-    let allRows=[], offset=0, limit=1000;
+    let dvRows=[], offset=0, limit=1000;
     while(true){{
-      let q=sb.from('holdings')
-        .select('symbol,security_name,broker,broker_name,buy_qty,total_sale_qty,holding_qty,avg_rate')
-        .eq('date',TODAY_STR).range(offset,offset+limit-1);
+      let q=sb.from('daily_volume').select('*')
+        .eq('date',TODAY_STR)
+        .order('total_buy_qty',{{ascending:false}})
+        .range(offset,offset+limit-1);
       if(mktSym) q=q.eq('symbol',mktSym);
       const {{data,error}}=await q;
       if(error) throw error;
-      allRows.push(...(data||[]));
+      dvRows.push(...(data||[]));
       if(!data||data.length<limit) break;
       offset+=limit;
     }}
 
-    if(!allRows.length){{
-      document.getElementById('spotlight-wrap').innerHTML='<div class="empty">No data available.</div>';
-      document.getElementById('vol-tbody').innerHTML='<tr><td colspan="9"><div class="empty">No data available.</div></td></tr>';
+    if(!dvRows.length){{
+      document.getElementById('spotlight-wrap').innerHTML='<div class="empty">No volume data. Run compile_holdings.py to populate daily_volume table.</div>';
+      document.getElementById('vol-tbody').innerHTML='<tr><td colspan="9"><div class="empty">No data.</div></td></tr>';
       document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';
       document.getElementById('ms-title').textContent='No data available.';
       return;
     }}
 
-    // Aggregate per symbol — all metrics from today's holdings rows
-    const symMap={{}};
-    for(const r of allRows){{
-      const s=r.symbol;
-      if(!symMap[s]) symMap[s]={{
-        symbol:s, security_name:r.security_name||s,
-        buy_qty:0, total_sale_qty:0, brokers:[]
-      }};
-      symMap[s].buy_qty        +=(r.buy_qty||0);
-      symMap[s].total_sale_qty +=(r.total_sale_qty||0);
-      symMap[s].brokers.push(r);
-    }}
-
-    VOL_DATA = Object.values(symMap).map(sm=>{{
-      const B=sm.brokers;
-      // top buyer = highest buy_qty today
-      const tb=B.reduce((b,r)=>(r.buy_qty||0)>(b.buy_qty||0)?r:b, B[0]);
-      // top seller = highest total_sale_qty today
-      const ts=B.reduce((b,r)=>(r.total_sale_qty||0)>(b.total_sale_qty||0)?r:b, B[0]);
-      // top holder = highest holding_qty today
-      const th=B.reduce((b,r)=>(r.holding_qty||0)>(b.holding_qty||0)?r:b, B[0]);
-      return {{
-        symbol          : sm.symbol,
-        security_name   : sm.security_name,
-        volume          : sm.buy_qty,
-        total_sale_qty  : sm.total_sale_qty,
-        top_buyer       : tb.broker||'—', top_buyer_name : tb.broker_name||'', top_buyer_qty  : tb.buy_qty||0,
-        top_seller      : ts.broker||'—', top_seller_name: ts.broker_name||'', top_seller_qty : ts.total_sale_qty||0,
-        top_holder      : th.broker||'—', top_holder_name: th.broker_name||'', top_holder_qty : th.holding_qty||0,
-        avg_rate        : th.avg_rate||0,
-      }};
-    }}).sort((a,b)=>b.volume-a.volume);
+    // Map daily_volume rows directly — pre-computed accurate values
+    VOL_DATA = dvRows.map(r=>({{
+      symbol           : r.symbol,
+      security_name    : r.security_name||r.symbol,
+      volume           : r.total_buy_qty||0,
+      total_sale_qty   : r.total_sel_qty||0,
+      top_buyer        : r.top_buyer||'—',
+      top_buyer_name   : r.top_buyer_name||'',
+      top_buyer_qty    : r.top_buyer_qty||0,
+      top_buyer_rate   : 0,   // not stored yet — will be added with daily_volume table
+      top_seller       : r.top_seller||'—',
+      top_seller_name  : r.top_seller_name||'',
+      top_seller_qty   : r.top_seller_qty||0,
+      top_seller_rate  : 0,   // not stored yet
+      top_holder       : r.top_holder||'—',
+      top_holder_name  : r.top_holder_name||'',
+      top_holder_qty   : r.top_holder_qty||0,
+      avg_rate         : r.top_holder_rate||0,
+    }})).sort((a,b)=>b.volume-a.volume);
 
     document.getElementById('ms-title').textContent =
       dateLabel.replace(' · Loading…','') + ' · ' + VOL_DATA.length + ' symbols traded';
@@ -864,22 +1014,20 @@ function renderVolTable(){{
   document.getElementById('vol-cnt').textContent=data.length+' symbols';
   document.getElementById('vol-table-title').textContent='Top scripts by volume — '+TODAY_STR+' (buy qty)';
   const tb=document.getElementById('vol-tbody');
-  if(!data.length){{tb.innerHTML='<tr><td colspan="9"><div class="empty">No data.</div></td></tr>';return;}}
+  if(!data.length){{tb.innerHTML='<tr><td colspan="7"><div class="empty">No data.</div></td></tr>';return;}}
   tb.innerHTML=data.map((r,i)=>{{
     const pct=Math.max(2,r.volume/maxV*80);
     return `<tr onclick="openDetail('${{r.symbol}}')" style="cursor:pointer">
+    return `<tr onclick="openDetail('${{r.symbol}}')" style="cursor:pointer">
       <td>${{rankBadge(i+1)}}</td>
       <td class="sym">${{r.symbol}}</td>
-      <td class="bname" style="max-width:160px">${{r.security_name}}</td>
       <td><div class="vol-wrap"><div class="vol-track"><div class="vol-bar" style="width:${{pct}}px"></div></div><span class="m pos">${{fmt(r.volume)}}</span></div></td>
       <td class="m neg">${{fmt(r.total_sale_qty)}}</td>
-      <td>${{brkCell(r.top_buyer,r.top_buyer_name,r.top_buyer_qty,'')}}</td>
-      <td>${{brkCell(r.top_seller,r.top_seller_name,r.top_seller_qty,'sell')}}</td>
-      <td>${{brkCell(r.top_holder,r.top_holder_name,r.top_holder_qty,'hold')}}</td>
-      <td class="m" style="color:var(--amber)">Rs ${{fmtf(r.avg_rate)}}</td>
+      <td>${{brkCell(r.top_buyer,r.top_buyer_name,r.top_buyer_qty,'',r.top_buyer_rate)}}</td>
+      <td>${{brkCell(r.top_seller,r.top_seller_name,r.top_seller_qty,'sell',r.top_seller_rate)}}</td>
+      <td>${{brkCell(r.top_holder,r.top_holder_name,r.top_holder_qty,'hold',r.avg_rate)}}</td>
     </tr>`;
   }}).join('');
-}}
 
 // ── SCRIPT DETAIL ──────────────────────────────────────────────────────────
 async function openDetail(sym){{
@@ -926,8 +1074,8 @@ async function openDetail(sym){{
         date           : d.date,
         volume         : d.buy_qty,
         total_sale_qty : d.total_sale_qty,
-        top_buyer      : tb.broker||'—', top_buyer_name : tb.broker_name||'', top_buyer_qty  : tb.buy_qty||0,
-        top_seller     : ts.broker||'—', top_seller_name: ts.broker_name||'', top_seller_qty : ts.total_sale_qty||0,
+        top_buyer      : tb.broker||'—', top_buyer_name : tb.broker_name||'', top_buyer_qty  : tb.buy_qty||0,       top_buyer_rate : tb.avg_rate||0,
+        top_seller     : ts.broker||'—', top_seller_name: ts.broker_name||'', top_seller_qty : ts.total_sale_qty||0, top_seller_rate: ts.avg_rate||0,
         top_holder     : th.broker||'—', top_holder_name: th.broker_name||'', top_holder_qty : th.holding_qty||0,
         avg_rate       : th.avg_rate||0,
       }};
@@ -986,7 +1134,7 @@ async function loadWeekly(){{
   try{{
     let all=[], offset=0, limit=1000;
     while(true){{
-      const {{data,error}}=await sb.from('holdings').select('symbol,buy_qty')
+      const {{data,error}}=await sb.from('daily_volume').select('symbol,total_buy_qty')
         .in('date',days).range(offset,offset+limit-1);
       if(error) throw error;
       all.push(...(data||[]));
@@ -994,7 +1142,7 @@ async function loadWeekly(){{
       offset+=limit;
     }}
     const sv={{}};
-    for(const r of all){{if(!sv[r.symbol])sv[r.symbol]=0;sv[r.symbol]+=(r.buy_qty||0);}}
+    for(const r of all){{if(!sv[r.symbol])sv[r.symbol]=0;sv[r.symbol]+=(r.total_buy_qty||0);}}
     const top10=Object.entries(sv).sort((a,b)=>b[1]-a[1]).slice(0,10);
     if(!top10.length){{document.getElementById('weekly-bars').innerHTML='<div class="empty">No weekly data.</div>';return;}}
     const maxV=top10[0][1];
@@ -1021,7 +1169,6 @@ function setStatus(msg,isError=false){{
 async function applyFilters(){{
   if(loading) return;
   const sym=document.getElementById('f-sym').value.trim();
-  if(!sym){{setStatus('⚠ Please select a stock symbol.',true);return;}}
   mktLoaded=false;  // reset so market summary reloads with new symbol
   const brk  =document.getElementById('f-brk').value.trim();
   const bname=document.getElementById('f-bname').value.trim().toLowerCase();
@@ -1034,9 +1181,10 @@ async function applyFilters(){{
     // Paginate holdings fully — no row limit
     let dd=[], _off=0, _lim=1000;
     while(true){{
-      let dq=sb.from('holdings').select('*').eq('symbol',sym)
+      let dq=sb.from('holdings').select('*')
         .order('date',{{ascending:false}}).order('holding_qty',{{ascending:false}})
         .range(_off,_off+_lim-1);
+      if(sym)   dq=dq.eq('symbol',sym);
       if(brk)   dq=dq.eq('broker',parseInt(brk));
       if(dfrom) dq=dq.gte('date',dfrom);
       if(dto)   dq=dq.lte('date',dto);
@@ -1047,12 +1195,42 @@ async function applyFilters(){{
       if(!data||data.length<_lim) break;
       _off+=_lim;
     }}
-    let cq=sb.from('cumulative').select('*').eq('symbol',sym).order('net_holding',{{ascending:false}});
-    if(brk)   cq=cq.eq('broker',parseInt(brk));
-    if(bname) cq=cq.ilike('broker_name','%'+bname+'%');
-    const {{data:cd,error:ce}}=await cq; if(ce) throw ce;
+    let cd=[];
+    if(dfrom || dto) {{
+      // Date filter active — aggregate cumulative from filtered holdings rows
+      const filtered = (dd||[]).filter(r=>!bname||(r.broker_name||'').toLowerCase().includes(bname));
+      const brkMap={{}};
+      for(const r of filtered){{
+        const key=r.broker;
+        if(!brkMap[key]) brkMap[key]={{
+          symbol:r.symbol, broker:r.broker, broker_name:r.broker_name||'',
+          total_buy_qty:0, total_sale_qty:0, total_ipo_qty:0, total_bulk_qty:0,
+          net_holding:0, total_buy_amt:0, total_bulk_amt:0
+        }};
+        brkMap[key].total_buy_qty   += (r.buy_qty||0);
+        brkMap[key].total_sale_qty  += (r.total_sale_qty||0);
+        brkMap[key].total_ipo_qty   += (r.ipo_sale_qty||0);
+        brkMap[key].total_bulk_qty  += (r.bulk_sale_qty||0);
+        brkMap[key].net_holding     += (r.holding_qty||0);
+        brkMap[key].total_buy_amt   += (r.buy_amt||0);
+        brkMap[key].total_bulk_amt  += (r.bulk_sale_amt||0);
+      }}
+      cd = Object.values(brkMap).map(b=>{{
+        const net = b.net_holding;
+        b.avg_rate = net>0 ? Math.round(((b.total_buy_amt - b.total_bulk_amt)/net)*100)/100 : 0;
+        return b;
+      }}).sort((a,b)=>b.net_holding-a.net_holding);
+    }} else {{
+      // No date filter — use all-time cumulative table
+      let cq=sb.from('cumulative').select('*').order('net_holding',{{ascending:false}});
+      if(sym) cq=cq.eq('symbol',sym);
+      if(brk)   cq=cq.eq('broker',parseInt(brk));
+      if(bname) cq=cq.ilike('broker_name','%'+bname+'%');
+      const {{data:cdata,error:ce}}=await cq; if(ce) throw ce;
+      cd = cdata||[];
+    }}
     DAILY=(dd||[]).filter(r=>!bname||(r.broker_name||'').toLowerCase().includes(bname));
-    CUMUL=cd||[]; FD=[...DAILY]; FC=[...CUMUL];
+    CUMUL=cd; FD=[...DAILY]; FC=[...CUMUL];
     const net=DAILY.reduce((s,r)=>s+(r.holding_qty||0),0);
     const top=CUMUL.length?CUMUL[0]:null;
     document.getElementById('s-pos').textContent=DAILY.length.toLocaleString();
@@ -1061,7 +1239,7 @@ async function applyFilters(){{
     document.getElementById('s-top').textContent=top?top.broker:'—';
     document.getElementById('s-top-name').textContent=top?(top.broker_name||''):'by net holding';
     pg.d=1;pg.c=1;renderD();renderC();renderChart(sym);
-    setStatus('<b>'+DAILY.length.toLocaleString()+'</b> daily · <b>'+CUMUL.length+'</b> cumulative for <b>'+sym+'</b>');
+    setStatus('<b>'+DAILY.length.toLocaleString()+'</b> daily positions · <b>'+CUMUL.length+'</b> cumulative'+(sym?' for <b>'+sym+'</b>':''));
   }}catch(e){{setStatus('Error: '+e.message,true);}}
   finally{{loading=false;}}
 }}
