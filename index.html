@@ -483,7 +483,6 @@ function renderVolTable(){
   tb.innerHTML=data.map((r,i)=>{
     const pct=Math.max(2,r.volume/maxV*80);
     return `<tr onclick="openDetail('${r.symbol}')" style="cursor:pointer">
-    return `<tr onclick="openDetail('${r.symbol}')" style="cursor:pointer">
       <td>${rankBadge(i+1)}</td>
       <td class="sym">${r.symbol}</td>
       <td><div class="vol-wrap"><div class="vol-track"><div class="vol-bar" style="width:${pct}px"></div></div><span class="m pos">${fmt(r.volume)}</span></div></td>
