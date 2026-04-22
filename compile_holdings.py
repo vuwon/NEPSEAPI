@@ -498,9 +498,10 @@ def main():
         del agg  # free aggregated data immediately
         print(f"      Done in {time.time()-t1:.1f}s")
 
-    # ── Upsert accurate daily volumes ────────────────────────────────
-    print("\nUpserting daily_volume table...")
+    # ── Upsert accurate daily volumes (skipped if table doesn't exist yet) ──
+    print("\nUpserting daily_volume table (if exists)...")
     if vol_frames:
+      try:
         all_vol = pd.concat(vol_frames, ignore_index=True)
         # Re-aggregate: pick top buyer/seller by max qty per date+symbol
         sym_buy = all_vol.groupby(["Date","Stock Symbol"])["buy_qty"].sum().reset_index()
@@ -524,6 +525,11 @@ def main():
         all_agg = pd.concat(agg_frames_copy, ignore_index=True) if agg_frames_copy else pd.DataFrame()
         upsert_daily_volume(supabase, sym_vol, all_agg)
         del sym_vol, all_agg
+      except Exception as e:
+        if "daily_volume" in str(e) or "PGRST205" in str(e) or "404" in str(e):
+            print(f"  ⚠️  daily_volume table not found — skipping. Run add_daily_volume_table.sql in Supabase to enable.")
+        else:
+            raise
 
     # ── Recalculate cumulative for all affected symbols ───────────────
     update_cumulative(supabase, all_symbols)
