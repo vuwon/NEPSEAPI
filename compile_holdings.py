@@ -1042,6 +1042,7 @@ function renderVolTable(){{
       <td>${{brkCell(r.top_holder,r.top_holder_name,r.top_holder_qty,'hold',r.avg_rate)}}</td>
     </tr>`;
   }}).join('');
+}}
 
 // ── SCRIPT DETAIL ──────────────────────────────────────────────────────────
 async function openDetail(sym){{
