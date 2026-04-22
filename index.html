@@ -158,7 +158,7 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
   <!-- FILTERS -->
   <div class="fp">
     <div class="fg"><label>Stock Symbol ★</label>
-      <select id="f-sym"><option value="">-- All Symbols --</option></select></div>
+      <select id="f-sym"><option value="">-- Select Symbol --</option></select></div>
     <div class="fg"><label>Broker #</label><input type="text" id="f-brk" placeholder="e.g. 58"></div>
     <div class="fg"><label>Broker Name</label><input type="text" id="f-bname" placeholder="e.g. Sunrise"></div>
     <div class="fg"><label>Date From</label><input type="date" id="f-dfrom"></div>
@@ -634,6 +634,7 @@ function setStatus(msg,isError=false){
 async function applyFilters(){
   if(loading) return;
   const sym=document.getElementById('f-sym').value.trim();
+  if(!sym){setStatus('⚠ Please select a specific stock symbol to search holdings.',true);return;}
   mktLoaded=false;  // reset so market summary reloads with new symbol
   const brk  =document.getElementById('f-brk').value.trim();
   const bname=document.getElementById('f-bname').value.trim().toLowerCase();
@@ -646,10 +647,9 @@ async function applyFilters(){
     // Paginate holdings fully — no row limit
     let dd=[], _off=0, _lim=1000;
     while(true){
-      let dq=sb.from('holdings').select('*')
+      let dq=sb.from('holdings').select('*').eq('symbol',sym)
         .order('date',{ascending:false}).order('holding_qty',{ascending:false})
         .range(_off,_off+_lim-1);
-      if(sym)   dq=dq.eq('symbol',sym);
       if(brk)   dq=dq.eq('broker',parseInt(brk));
       if(dfrom) dq=dq.gte('date',dfrom);
       if(dto)   dq=dq.lte('date',dto);
@@ -687,8 +687,7 @@ async function applyFilters(){
       }).sort((a,b)=>b.net_holding-a.net_holding);
     } else {
       // No date filter — use all-time cumulative table
-      let cq=sb.from('cumulative').select('*').order('net_holding',{ascending:false});
-      if(sym) cq=cq.eq('symbol',sym);
+      let cq=sb.from('cumulative').select('*').eq('symbol',sym).order('net_holding',{ascending:false});
       if(brk)   cq=cq.eq('broker',parseInt(brk));
       if(bname) cq=cq.ilike('broker_name','%'+bname+'%');
       const {data:cdata,error:ce}=await cq; if(ce) throw ce;
