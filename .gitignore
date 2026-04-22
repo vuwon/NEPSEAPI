@@ -13,3 +13,9 @@ Requirements.txt
 REMOVE_SCRIPTS.py
 SELECTED_SCRIPTS.txt
 pyproject.toml
+compile_holdings_*.py
+index_*.html
+run_local.bat
+generate_html.py
+yaml/
+nepse/
