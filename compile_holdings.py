@@ -478,9 +478,18 @@ def main():
         del df  # free raw data immediately
 
         # Keep small copy for top holder lookup in daily_volume
-        agg_frames_copy.append(
-            agg[["Date","Stock Symbol","broker","broker_name","holding_qty","avg_rate"]].copy()
-        )
+        # broker_name not yet attached to agg — save minimal cols only
+        agg_copy = agg[["Date","Stock Symbol","broker","holding_qty","avg_rate"]].copy()
+        agg_copy["broker_name"] = ""  # will be filled from broker_names lookup
+        # Attach broker names if available
+        if not broker_names.empty:
+            agg_copy = agg_copy.merge(broker_names, on="broker", how="left")
+            if "broker_name_y" in agg_copy.columns:
+                agg_copy["broker_name"] = agg_copy["broker_name_y"].fillna("")
+                agg_copy = agg_copy.drop(columns=["broker_name_x","broker_name_y"], errors="ignore")
+            else:
+                agg_copy["broker_name"] = agg_copy.get("broker_name", pd.Series([""]* len(agg_copy))).fillna("")
+        agg_frames_copy.append(agg_copy)
         vol_frames.append(vol)
 
         # Upsert this file's holdings data to Supabase right away
