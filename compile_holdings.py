@@ -925,49 +925,66 @@ async function loadMarketSummary(){{
     document.getElementById('ms-title').textContent = dateLabel + ' · Loading…';
     TODAY_STR = LATEST_DATE;  // use latest date for all queries below
 
-    // ── Query daily_volume table — accurate counts from ALL brokers ────
+    // ── Fetch from holdings table directly (daily_volume table optional) ──
     const mktSym = document.getElementById('f-sym').value.trim();
-    let dvRows=[], offset=0, limit=1000;
+    let allRows=[], offset=0, limit=1000;
     while(true){{
-      let q=sb.from('daily_volume').select('*')
-        .eq('date',TODAY_STR)
-        .order('total_buy_qty',{{ascending:false}})
-        .range(offset,offset+limit-1);
+      let q=sb.from('holdings')
+        .select('symbol,security_name,broker,broker_name,buy_qty,total_sale_qty,holding_qty,avg_rate')
+        .eq('date',TODAY_STR).range(offset,offset+limit-1);
       if(mktSym) q=q.eq('symbol',mktSym);
       const {{data,error}}=await q;
       if(error) throw error;
-      dvRows.push(...(data||[]));
+      allRows.push(...(data||[]));
       if(!data||data.length<limit) break;
       offset+=limit;
     }}
 
-    if(!dvRows.length){{
-      document.getElementById('spotlight-wrap').innerHTML='<div class="empty">No volume data. Run compile_holdings.py to populate daily_volume table.</div>';
-      document.getElementById('vol-tbody').innerHTML='<tr><td colspan="9"><div class="empty">No data.</div></td></tr>';
+    if(!allRows.length){{
+      document.getElementById('spotlight-wrap').innerHTML='<div class="empty">No data for '+TODAY_STR+'.</div>';
+      document.getElementById('vol-tbody').innerHTML='<tr><td colspan="7"><div class="empty">No data.</div></td></tr>';
       document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';
       document.getElementById('ms-title').textContent='No data available.';
       return;
     }}
 
-    // Map daily_volume rows directly — pre-computed accurate values
-    VOL_DATA = dvRows.map(r=>({{
-      symbol           : r.symbol,
-      security_name    : r.security_name||r.symbol,
-      volume           : r.total_buy_qty||0,
-      total_sale_qty   : r.total_sel_qty||0,
-      top_buyer        : r.top_buyer||'—',
-      top_buyer_name   : r.top_buyer_name||'',
-      top_buyer_qty    : r.top_buyer_qty||0,
-      top_buyer_rate   : 0,   // not stored yet — will be added with daily_volume table
-      top_seller       : r.top_seller||'—',
-      top_seller_name  : r.top_seller_name||'',
-      top_seller_qty   : r.top_seller_qty||0,
-      top_seller_rate  : 0,   // not stored yet
-      top_holder       : r.top_holder||'—',
-      top_holder_name  : r.top_holder_name||'',
-      top_holder_qty   : r.top_holder_qty||0,
-      avg_rate         : r.top_holder_rate||0,
-    }})).sort((a,b)=>b.volume-a.volume);
+    // Aggregate per symbol from holdings rows
+    const symMap={{}};
+    for(const r of allRows){{
+      const s=r.symbol;
+      if(!symMap[s]) symMap[s]={{
+        symbol:s, security_name:r.security_name||s,
+        buy_qty:0, total_sale_qty:0, brokers:[]
+      }};
+      symMap[s].buy_qty        +=(r.buy_qty||0);
+      symMap[s].total_sale_qty +=(r.total_sale_qty||0);
+      symMap[s].brokers.push(r);
+    }}
+
+    VOL_DATA = Object.values(symMap).map(sm=>{{
+      const B=sm.brokers;
+      const tb=B.reduce((b,r)=>(r.buy_qty||0)>(b.buy_qty||0)?r:b, B[0]);
+      const ts=B.reduce((b,r)=>(r.total_sale_qty||0)>(b.total_sale_qty||0)?r:b, B[0]);
+      const th=B.reduce((b,r)=>(r.holding_qty||0)>(b.holding_qty||0)?r:b, B[0]);
+      return {{
+        symbol          : sm.symbol,
+        security_name   : sm.security_name,
+        volume          : sm.buy_qty,
+        total_sale_qty  : sm.total_sale_qty,
+        top_buyer       : tb.broker||'—',
+        top_buyer_name  : tb.broker_name||'',
+        top_buyer_qty   : tb.buy_qty||0,
+        top_buyer_rate  : tb.avg_rate||0,
+        top_seller      : ts.broker||'—',
+        top_seller_name : ts.broker_name||'',
+        top_seller_qty  : ts.total_sale_qty||0,
+        top_seller_rate : ts.avg_rate||0,
+        top_holder      : th.broker||'—',
+        top_holder_name : th.broker_name||'',
+        top_holder_qty  : th.holding_qty||0,
+        avg_rate        : th.avg_rate||0,
+      }};
+    }}).sort((a,b)=>b.volume-a.volume);
 
     document.getElementById('ms-title').textContent =
       dateLabel.replace(' · Loading…','') + ' · ' + VOL_DATA.length + ' symbols traded';
@@ -1145,21 +1162,32 @@ function renderDetTable(){{
 
 // ── WEEKLY ─────────────────────────────────────────────────────────────────
 async function loadWeekly(){{
-  const days=getLast5();
-  try{{
+  try {{
+    // Get last 5 actual trading dates from DB
+    const {{data:dateData, error:dateErr}} = await sb.from('holdings')
+      .select('date').order('date',{{ascending:false}}).limit(5000);
+    if(dateErr) throw dateErr;
+    const last5 = [...new Set((dateData||[]).map(r=>r.date))]
+      .sort().reverse().slice(0,5);
+    if(!last5.length){{
+      document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';
+      return;
+    }}
+    // Fetch buy_qty for those 5 dates
     let all=[], offset=0, limit=1000;
     while(true){{
-      const {{data,error}}=await sb.from('daily_volume').select('symbol,total_buy_qty')
-        .in('date',days).range(offset,offset+limit-1);
+      const {{data,error}}=await sb.from('holdings')
+        .select('symbol,buy_qty').in('date',last5)
+        .range(offset,offset+limit-1);
       if(error) throw error;
       all.push(...(data||[]));
       if(!data||data.length<limit) break;
       offset+=limit;
     }}
     const sv={{}};
-    for(const r of all){{if(!sv[r.symbol])sv[r.symbol]=0;sv[r.symbol]+=(r.total_buy_qty||0);}}
+    for(const r of all){{if(!sv[r.symbol])sv[r.symbol]=0;sv[r.symbol]+=(r.buy_qty||0);}}
     const top10=Object.entries(sv).sort((a,b)=>b[1]-a[1]).slice(0,10);
-    if(!top10.length){{document.getElementById('weekly-bars').innerHTML='<div class="empty">No weekly data.</div>';return;}}
+    if(!top10.length){{document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';return;}}
     const maxV=top10[0][1];
     const medals=['🥇','🥈','🥉'];
     document.getElementById('weekly-bars').innerHTML=top10.map(([sym,vol],i)=>{{
@@ -1172,8 +1200,6 @@ async function loadWeekly(){{
     }}).join('');
   }}catch(e){{document.getElementById('weekly-bars').innerHTML='<div class="empty">Error: '+e.message+'</div>';}}
 }}
-
-// ── HOLDINGS TABS ──────────────────────────────────────────────────────────
 function setStatus(msg,isError=false){{
   const el=document.getElementById('status');
   el.innerHTML=msg;
