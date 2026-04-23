@@ -380,7 +380,7 @@ async function loadMarketSummary(){
     let allRows=[], offset=0, limit=1000;
     while(true){
       let q=sb.from('holdings')
-        .select('symbol,security_name,broker,broker_name,buy_qty,total_sale_qty,holding_qty,avg_rate')
+        .select('symbol,security_name,broker,broker_name,buy_qty,buy_amt,total_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty,avg_rate')
         .eq('date',TODAY_STR).range(offset,offset+limit-1);
       if(mktSym) q=q.eq('symbol',mktSym);
       const {data,error}=await q;
@@ -428,7 +428,7 @@ async function loadMarketSummary(){
         top_seller      : ts.broker||'—',
         top_seller_name : ts.broker_name||'',
         top_seller_qty  : ts.total_sale_qty||0,
-        top_seller_rate : ts.avg_rate||0,
+        top_seller_rate : (ts.bulk_sale_qty||0)>0 ? Math.round(((ts.bulk_sale_amt||0)/(ts.bulk_sale_qty||1))*100)/100 : (ts.avg_rate||0),
         top_holder      : th.broker||'—',
         top_holder_name : th.broker_name||'',
         top_holder_qty  : th.holding_qty||0,
@@ -525,7 +525,7 @@ async function openDetail(sym){
     let all=[], offset=0, limit=1000;
     while(true){
       const {data,error}=await sb.from('holdings')
-        .select('date,broker,broker_name,buy_qty,total_sale_qty,holding_qty,avg_rate')
+        .select('date,broker,broker_name,buy_qty,buy_amt,total_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty,avg_rate')
         .eq('symbol',sym).range(offset,offset+limit-1);
       if(error) throw error;
       all.push(...(data||[]));
@@ -557,7 +557,7 @@ async function openDetail(sym){
         volume         : d.buy_qty,
         total_sale_qty : d.total_sale_qty,
         top_buyer      : tb.broker||'—', top_buyer_name : tb.broker_name||'', top_buyer_qty  : tb.buy_qty||0,       top_buyer_rate : tb.avg_rate||0,
-        top_seller     : ts.broker||'—', top_seller_name: ts.broker_name||'', top_seller_qty : ts.total_sale_qty||0, top_seller_rate: ts.avg_rate||0,
+        top_seller     : ts.broker||'—', top_seller_name: ts.broker_name||'', top_seller_qty : ts.total_sale_qty||0, top_seller_rate: (ts.bulk_sale_qty||0)>0?Math.round(((ts.bulk_sale_amt||0)/(ts.bulk_sale_qty||1))*100)/100:(ts.avg_rate||0),
         top_holder     : th.broker||'—', top_holder_name: th.broker_name||'', top_holder_qty : th.holding_qty||0,
         avg_rate       : th.avg_rate||0,
       };
@@ -603,10 +603,9 @@ function renderDetTable(){
       <td><div class="vol-wrap"><span class="m pos">${fmt(r.volume)}</span></div></td>
       <td class="m neg">${fmt(r.total_sale_qty)}</td>
       <td>${rankBadge(r.rank)}</td>
-      <td>${brkCell(r.top_buyer,r.top_buyer_name,r.top_buyer_qty,'')}</td>
-      <td>${brkCell(r.top_seller,r.top_seller_name,r.top_seller_qty,'sell')}</td>
-      <td>${brkCell(r.top_holder,r.top_holder_name,r.top_holder_qty,'hold')}</td>
-      <td class="m" style="color:var(--amber)">Rs ${fmtf(r.avg_rate)}</td>
+      <td>${brkCell(r.top_buyer,r.top_buyer_name,r.top_buyer_qty,'',r.top_buyer_rate)}</td>
+      <td>${brkCell(r.top_seller,r.top_seller_name,r.top_seller_qty,'sell',r.top_seller_rate)}</td>
+      <td>${brkCell(r.top_holder,r.top_holder_name,r.top_holder_qty,'hold',r.avg_rate)}</td>
     </tr>`).join('');
 }
 
@@ -660,9 +659,9 @@ function setStatus(msg,isError=false){
 async function applyFilters(){
   if(loading) return;
   const sym=document.getElementById('f-sym').value.trim();
-  if(!sym){setStatus('⚠ Please select a specific stock symbol to search holdings.',true);return;}
+  const brk=document.getElementById('f-brk').value.trim();
+  if(!sym && !brk){setStatus('⚠ Please select a stock symbol or enter a broker number.',true);return;}
   mktLoaded=false;  // reset so market summary reloads with new symbol
-  const brk  =document.getElementById('f-brk').value.trim();
   const bname=document.getElementById('f-bname').value.trim().toLowerCase();
   const dfrom=document.getElementById('f-dfrom').value;
   const dto  =document.getElementById('f-dto').value;
@@ -673,9 +672,10 @@ async function applyFilters(){
     // Paginate holdings fully — no row limit
     let dd=[], _off=0, _lim=1000;
     while(true){
-      let dq=sb.from('holdings').select('*').eq('symbol',sym)
+      let dq=sb.from('holdings').select('*')
         .order('date',{ascending:false}).order('holding_qty',{ascending:false})
         .range(_off,_off+_lim-1);
+      if(sym)   dq=dq.eq('symbol',sym);
       if(brk)   dq=dq.eq('broker',parseInt(brk));
       if(dfrom) dq=dq.gte('date',dfrom);
       if(dto)   dq=dq.lte('date',dto);
@@ -713,7 +713,8 @@ async function applyFilters(){
       }).sort((a,b)=>b.net_holding-a.net_holding);
     } else {
       // No date filter — use all-time cumulative table
-      let cq=sb.from('cumulative').select('*').eq('symbol',sym).order('net_holding',{ascending:false});
+      let cq=sb.from('cumulative').select('*').order('net_holding',{ascending:false}).limit(200);
+      if(sym) cq=cq.eq('symbol',sym);
       if(brk)   cq=cq.eq('broker',parseInt(brk));
       if(bname) cq=cq.ilike('broker_name','%'+bname+'%');
       const {data:cdata,error:ce}=await cq; if(ce) throw ce;
