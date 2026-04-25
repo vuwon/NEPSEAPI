@@ -184,6 +184,7 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
     <div class="tab" onclick="showTab('cumul')">Cumulative</div>
     <div class="tab" onclick="showTab('topb')">Top Brokers Chart</div>
     <div class="tab" onclick="showTab('mkt')">Market Summary</div>
+    <div class="tab" onclick="showTab('cmp')">Broker Comparison</div>
   </div>
 
   <!-- TAB 1: DAILY HOLDINGS -->
@@ -306,6 +307,76 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
     </div>
 
   </div>
+
+  <!-- TAB 5: BROKER COMPARISON -->
+  <div id="tab-cmp" style="display:none">
+    <div class="tw" style="margin-bottom:14px">
+      <div class="th2">
+        <span class="ttitle">Broker Comparison</span>
+        <span class="tcnt" id="cmp-cnt">—</span>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;border-bottom:1px solid var(--border)">
+        <div class="fg"><label>Add Broker #</label>
+          <input type="text" id="cmp-brk-input" placeholder="e.g. 42" style="width:110px" onkeydown="if(event.key==='Enter')addCmpBroker()"></div>
+        <div class="fg"><label>View</label>
+          <select id="cmp-mode">
+            <option value="cumul">Cumulative (all dates)</option>
+            <option value="date">Single date</option>
+          </select></div>
+        <div class="fg" id="cmp-date-fg" style="display:none"><label>Date</label>
+          <input type="date" id="cmp-date"></div>
+        <div class="btns">
+          <button class="btn btn-p" onclick="addCmpBroker()">Add Broker</button>
+          <button class="btn btn-g" onclick="loadCmp()">Compare</button>
+          <button class="btn btn-g" onclick="clearCmpBrokers()">Clear All</button>
+        </div>
+      </div>
+      <div style="padding:10px 16px;min-height:42px;display:flex;flex-wrap:wrap;gap:6px;align-items:center" id="cmp-tags">
+        <span style="font-size:12px;color:var(--muted)">No brokers added yet — type a broker number above.</span>
+      </div>
+    </div>
+
+    <!-- Sub-tabs: Quantities / Rates / Both -->
+    <div style="display:flex;gap:2px;margin-bottom:14px;border-bottom:1px solid var(--border)">
+      <div class="tab active" id="ctab-qty"  onclick="setCmpTab('qty')">Quantities</div>
+      <div class="tab"        id="ctab-rate" onclick="setCmpTab('rate')">Avg Rates</div>
+    </div>
+
+    <!-- Quantity chart -->
+    <div id="cmp-qty-panel">
+      <div class="cw" style="margin-bottom:14px">
+        <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;font-size:12px;color:var(--muted)">
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#185FA5;margin-right:4px"></span>Buy Qty</span>
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#A32D2D;margin-right:4px"></span>Sell Qty</span>
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3B6D11;margin-right:4px"></span>Net Holding</span>
+        </div>
+        <div style="position:relative;width:100%;height:320px">
+          <canvas id="cmp-chart-qty" role="img" aria-label="Grouped bar chart comparing buy sell and holding quantities per broker"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rate cards -->
+    <div id="cmp-rate-panel" style="display:none">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px" id="cmp-rate-cards">
+        <div class="empty">Add brokers and click Compare.</div>
+      </div>
+    </div>
+
+    <!-- Data table -->
+    <div class="tw">
+      <div class="th2"><span class="ttitle">Comparison table</span></div>
+      <div class="tscroll"><table>
+        <thead><tr>
+          <th>Broker #</th><th>Broker Name</th>
+          <th>Buy Qty</th><th>Sell Qty</th><th>IPO Sale</th><th>Bulk Sale</th>
+          <th>Net Holding</th><th>Avg Buy Rate</th><th>Avg Sell Rate</th><th>Holding Rate</th>
+        </tr></thead>
+        <tbody id="cmp-tbody"><tr><td colspan="10"><div class="empty">Add brokers and click Compare.</div></td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -811,14 +882,15 @@ function renderChart(sym){
 }
 
 function showTab(name){
-  ['daily','cumul','topb','mkt'].forEach(t=>{
+  ['daily','cumul','topb','mkt','cmp'].forEach(t=>{
     document.getElementById('tab-'+t).style.display=t===name?'':'none';
   });
   document.querySelectorAll('.tab').forEach((el,i)=>{
-    el.classList.toggle('active',['daily','cumul','topb','mkt'][i]===name);
+    el.classList.toggle('active',['daily','cumul','topb','mkt','cmp'][i]===name);
   });
   if(name==='topb') renderChart(document.getElementById('f-sym').value);
   if(name==='mkt')  loadMarketSummary();
+  if(name==='cmp')  initCmp();
 }
 function chpg(dir,t){pg[t]+=dir;if(t==='d')renderD();else renderC();window.scrollTo({top:0,behavior:'smooth'});}
 
@@ -848,6 +920,240 @@ async function init(){
 }
 
 init();
+
+// ── BROKER COMPARISON ───────────────────────────────────────────────────────
+let CMP_BROKERS = [];   // {broker, name} — persists across symbol changes
+let cmpChartQty = null;
+let cmpTab = 'qty';
+let cmpInitDone = false;
+
+function initCmp(){
+  // Show/hide date input based on mode
+  document.getElementById('cmp-mode').onchange = function(){
+    document.getElementById('cmp-date-fg').style.display = this.value==='date' ? '' : 'none';
+  };
+  renderCmpTags();
+}
+
+function addCmpBroker(){
+  const val = document.getElementById('cmp-brk-input').value.trim();
+  const brk = parseInt(val);
+  if(!brk) return;
+  if(CMP_BROKERS.find(b=>b.broker===brk)){
+    alert('Broker '+brk+' already added.');
+    document.getElementById('cmp-brk-input').value='';
+    return;
+  }
+  CMP_BROKERS.push({broker:brk, name:'Broker '+brk});
+  document.getElementById('cmp-brk-input').value='';
+  renderCmpTags();
+}
+
+function removeCmpBroker(brk){
+  CMP_BROKERS = CMP_BROKERS.filter(b=>b.broker!==brk);
+  renderCmpTags();
+}
+
+function clearCmpBrokers(){
+  CMP_BROKERS=[];
+  renderCmpTags();
+  document.getElementById('cmp-tbody').innerHTML='<tr><td colspan="10"><div class="empty">Add brokers and click Compare.</div></td></tr>';
+  document.getElementById('cmp-rate-cards').innerHTML='<div class="empty">Add brokers and click Compare.</div>';
+  if(cmpChartQty){ cmpChartQty.destroy(); cmpChartQty=null; }
+  document.getElementById('cmp-cnt').textContent='—';
+}
+
+function renderCmpTags(){
+  const wrap = document.getElementById('cmp-tags');
+  if(!CMP_BROKERS.length){
+    wrap.innerHTML='<span style="font-size:12px;color:var(--muted)">No brokers added yet.</span>';
+    return;
+  }
+  wrap.innerHTML = CMP_BROKERS.map(b=>
+    `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:12px">
+      <span>Br ${b.broker}</span><span style="font-size:11px;color:var(--muted)">${b.name}</span>
+      <span onclick="removeCmpBroker(${b.broker})" style="cursor:pointer;color:var(--muted);font-size:14px;line-height:1;margin-left:2px">×</span>
+    </div>`
+  ).join('');
+}
+
+async function loadCmp(){
+  const sym = document.getElementById('f-sym').value.trim();
+  if(!sym){ alert('Please select a stock symbol first.'); return; }
+  if(!CMP_BROKERS.length){ alert('Please add at least one broker.'); return; }
+
+  const mode = document.getElementById('cmp-mode').value;
+  const dateVal = document.getElementById('cmp-date').value;
+  if(mode==='date' && !dateVal){ alert('Please select a date.'); return; }
+
+  document.getElementById('cmp-cnt').textContent='Loading…';
+  document.getElementById('cmp-tbody').innerHTML='<tr><td colspan="10"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
+
+  const brokerNums = CMP_BROKERS.map(b=>b.broker);
+  let results = [];
+
+  if(mode==='cumul'){
+    // Query cumulative table for all selected brokers
+    const {data,error} = await sb.from('cumulative').select('*')
+      .eq('symbol',sym).in('broker',brokerNums);
+    if(error){ console.error(error); return; }
+    results = (data||[]).map(r=>{
+      const buyRate = r.total_buy_qty>0 ? r.total_buy_amt/r.total_buy_qty : 0;
+      const sellRate = r.total_bulk_qty>0 ? r.total_bulk_amt/r.total_bulk_qty : 0;
+      return {
+        broker       : r.broker,
+        name         : r.broker_name||('Broker '+r.broker),
+        buy_qty      : r.total_buy_qty||0,
+        sell_qty     : r.total_sale_qty||0,
+        ipo_qty      : r.total_ipo_qty||0,
+        bulk_qty     : r.total_bulk_qty||0,
+        net_holding  : r.net_holding||0,
+        avg_buy_rate : Math.round(buyRate*100)/100,
+        avg_sell_rate: Math.round(sellRate*100)/100,
+        holding_rate : r.avg_rate||0,
+        mode         : 'Cumulative',
+      };
+    });
+  } else {
+    // Query holdings table for selected date
+    const {data,error} = await sb.from('holdings').select('*')
+      .eq('symbol',sym).eq('date',dateVal).in('broker',brokerNums);
+    if(error){ console.error(error); return; }
+    results = (data||[]).map(r=>{
+      const sellRate = r.bulk_sale_qty>0 ? r.bulk_sale_amt/r.bulk_sale_qty : 0;
+      return {
+        broker       : r.broker,
+        name         : r.broker_name||('Broker '+r.broker),
+        buy_qty      : r.buy_qty||0,
+        sell_qty     : r.total_sale_qty||0,
+        ipo_qty      : r.ipo_sale_qty||0,
+        bulk_qty     : r.bulk_sale_qty||0,
+        net_holding  : r.holding_qty||0,
+        avg_buy_rate : r.avg_rate||0,
+        avg_sell_rate: Math.round(sellRate*100)/100,
+        holding_rate : r.avg_rate||0,
+        mode         : dateVal,
+      };
+    });
+  }
+
+  // Update broker names from results
+  results.forEach(r=>{
+    const b=CMP_BROKERS.find(x=>x.broker===r.broker);
+    if(b) b.name=r.name;
+  });
+  renderCmpTags();
+
+  // Add missing brokers (no data) as zero rows
+  brokerNums.forEach(brk=>{
+    if(!results.find(r=>r.broker===brk)){
+      const b=CMP_BROKERS.find(x=>x.broker===brk)||{broker:brk,name:'Broker '+brk};
+      results.push({broker:brk,name:b.name,buy_qty:0,sell_qty:0,ipo_qty:0,bulk_qty:0,
+        net_holding:0,avg_buy_rate:0,avg_sell_rate:0,holding_rate:0,mode:mode==='cumul'?'Cumulative':dateVal});
+    }
+  });
+  results.sort((a,b)=>a.broker-b.broker);
+
+  document.getElementById('cmp-cnt').textContent=results.length+' brokers · '+sym+(mode==='cumul'?' (cumulative)':' ('+dateVal+')');
+
+  renderCmpChart(results);
+  renderCmpRateCards(results);
+  renderCmpTable(results);
+}
+
+function renderCmpChart(results){
+  if(cmpChartQty){ cmpChartQty.destroy(); cmpChartQty=null; }
+  const labels = results.map(r=>'Br '+r.broker);
+  const canvas = document.getElementById('cmp-chart-qty');
+  cmpChartQty = new Chart(canvas, {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Buy Qty',     data:results.map(r=>r.buy_qty),     backgroundColor:'#185FA5',borderWidth:0},
+        {label:'Sell Qty',    data:results.map(r=>r.sell_qty),    backgroundColor:'#A32D2D',borderWidth:0},
+        {label:'Net Holding', data:results.map(r=>r.net_holding), backgroundColor:'#3B6D11',borderWidth:0},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{autoSkip:false,maxRotation:0,font:{size:11}},grid:{display:false}},
+        y:{ticks:{callback:v=>v>=1000?(v/1000).toFixed(1)+'k':v,font:{size:11}},
+           grid:{color:'rgba(128,128,128,0.1)'}}
+      }
+    }
+  });
+}
+
+function renderCmpRateCards(results){
+  const container = document.getElementById('cmp-rate-cards');
+  if(!results.length){container.innerHTML='<div class="empty">No data.</div>';return;}
+  container.innerHTML = results.map(r=>
+    `<div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Broker ${r.broker}</div>
+      <div style="font-size:13px;font-weight:600;margin:4px 0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div>
+      <div style="font-size:12px;line-height:2;border-top:1px solid var(--border);padding-top:8px">
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--muted)">Buy qty</span>
+          <span style="font-family:var(--mono);color:#00c8ff">${fmt(r.buy_qty)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--muted)">Sell qty</span>
+          <span style="font-family:var(--mono);color:var(--red)">${fmt(r.sell_qty)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--muted)">Net holding</span>
+          <span style="font-family:var(--mono);color:var(--green)">${fmt(r.net_holding)}</span>
+        </div>
+        <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px">
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--muted)">Avg buy rate</span>
+          <span style="font-family:var(--mono);color:var(--amber)">Rs ${fmtf(r.avg_buy_rate)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--muted)">Avg sell rate</span>
+          <span style="font-family:var(--mono);color:var(--amber)">Rs ${fmtf(r.avg_sell_rate)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--muted)">Holding rate</span>
+          <span style="font-family:var(--mono);color:var(--amber)">Rs ${fmtf(r.holding_rate)}</span>
+        </div>
+        </div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+function renderCmpTable(results){
+  const tb = document.getElementById('cmp-tbody');
+  if(!results.length){tb.innerHTML='<tr><td colspan="10"><div class="empty">No data.</div></td></tr>';return;}
+  tb.innerHTML = results.map(r=>
+    `<tr>
+      <td><span class="brk">${r.broker}</span></td>
+      <td class="bname">${r.name}</td>
+      <td class="pos">${fmt(r.buy_qty)}</td>
+      <td class="neg">${fmt(r.sell_qty)}</td>
+      <td><span class="ipo">${fmt(r.ipo_qty)}</span></td>
+      <td class="m">${fmt(r.bulk_qty)}</td>
+      <td class="${r.net_holding>=0?'pos':'neg'}">${fmt(r.net_holding)}</td>
+      <td class="m" style="color:var(--amber)">Rs ${fmtf(r.avg_buy_rate)}</td>
+      <td class="m" style="color:var(--amber)">Rs ${fmtf(r.avg_sell_rate)}</td>
+      <td class="m" style="color:var(--amber)">Rs ${fmtf(r.holding_rate)}</td>
+    </tr>`
+  ).join('');
+}
+
+function setCmpTab(tab){
+  cmpTab=tab;
+  document.getElementById('ctab-qty').classList.toggle('active',tab==='qty');
+  document.getElementById('ctab-rate').classList.toggle('active',tab==='rate');
+  document.getElementById('cmp-qty-panel').style.display  = tab==='qty'  ? '' : 'none';
+  document.getElementById('cmp-rate-panel').style.display = tab==='rate' ? '' : 'none';
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </script>
 </body>
 </html>
