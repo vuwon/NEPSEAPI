@@ -321,14 +321,9 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
         <div class="fg"><label>Add Broker #</label>
           <input type="text" id="cmp-brk-input" placeholder="e.g. 42" style="width:110px"
             onkeydown="if(event.key==='Enter')addCmpBroker()"></div>
-        <div class="fg"><label>View</label>
-          <select id="cmp-mode" onchange="toggleCmpDates()">
-            <option value="cumul">Cumulative (all dates)</option>
-            <option value="range">Date range</option>
-          </select></div>
-        <div class="fg" id="cmp-dfrom-fg" style="display:none"><label>Date From</label>
+        <div class="fg"><label>Date From</label>
           <input type="date" id="cmp-dfrom"></div>
-        <div class="fg" id="cmp-dto-fg" style="display:none"><label>Date To</label>
+        <div class="fg"><label>Date To</label>
           <input type="date" id="cmp-dto"></div>
         <div class="btns">
           <button class="btn btn-p" onclick="addCmpBroker()">Add Broker</button>
@@ -361,12 +356,12 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
       </div>
       <div class="tscroll"><table>
         <thead><tr>
-          <th>Broker</th>
-          <th>Buy Qty<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
-          <th>Sell Qty<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
-          <th>IPO Sale</th>
-          <th>Bulk Sale<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
-          <th>Net Holding<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Holding Rate</span></th>
+          <th onclick="sortCmp('broker')">Broker ↕</th>
+          <th onclick="sortCmp('buy_qty')">Buy Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortCmp('sell_qty')">Sell Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortCmp('ipo_qty')">IPO Sale ↕</th>
+          <th onclick="sortCmp('bulk_qty')">Bulk Sale ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortCmp('net_holding')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Holding Rate</span></th>
         </tr></thead>
         <tbody id="cmp-tbody">
           <tr><td colspan="6"><div class="empty">Select a symbol, add brokers, then click Compare.</div></td></tr>
@@ -681,33 +676,43 @@ function renderDetTable(){
 // ── WEEKLY ─────────────────────────────────────────────────────────────────
 async function loadWeekly(){
   try {
-    // Get last 5 actual trading dates from DB
-    const {data:dateData, error:dateErr} = await sb.from('holdings')
-      .select('date').order('date',{ascending:false}).limit(5000);
-    if(dateErr) throw dateErr;
-    const last5 = [...new Set((dateData||[]).map(r=>r.date))]
-      .sort().reverse().slice(0,5);
-    if(!last5.length){
-      document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';
-      return;
+    // Step 1: Get last 5 distinct trading dates
+    let dateSet=new Set(), off=0;
+    while(dateSet.size<5){
+      const {data,error}=await sb.from('holdings')
+        .select('date').order('date',{ascending:false})
+        .range(off,off+499);
+      if(error||!data||!data.length) break;
+      data.forEach(r=>dateSet.add(r.date));
+      off+=500;
+      if(data.length<500) break;
     }
-    // Fetch buy_qty for those 5 dates
+    const last5=[...dateSet].sort().reverse().slice(0,5);
+    if(!last5.length){document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';return;}
+
+    // Step 2: Fetch ALL buy_qty rows for those 5 dates (paginated)
     let all=[], offset=0, limit=1000;
     while(true){
       const {data,error}=await sb.from('holdings')
-        .select('symbol,buy_qty').in('date',last5)
+        .select('symbol,buy_qty,date')
+        .in('date',last5)
         .range(offset,offset+limit-1);
       if(error) throw error;
       all.push(...(data||[]));
       if(!data||data.length<limit) break;
       offset+=limit;
     }
+
+    // Step 3: Sum buy_qty per symbol across ALL 5 dates
     const sv={};
     for(const r of all){if(!sv[r.symbol])sv[r.symbol]=0;sv[r.symbol]+=(r.buy_qty||0);}
     const top10=Object.entries(sv).sort((a,b)=>b[1]-a[1]).slice(0,10);
     if(!top10.length){document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';return;}
     const maxV=top10[0][1];
     const medals=['🥇','🥈','🥉'];
+    const dateRange=last5[last5.length-1]+' → '+last5[0];
+    const titleEl=document.querySelector('.weekly-section .ctitle');
+    if(titleEl) titleEl.textContent='Top 10 scripts by volume — '+dateRange+' ('+last5.length+' trading days)';
     document.getElementById('weekly-bars').innerHTML=top10.map(([sym,vol],i)=>{
       const pct=Math.max(2,vol/maxV*100);
       return `<div class="wrow">
@@ -925,11 +930,7 @@ let cmpChart = null;
 
 function initCmp(){ renderCmpTags(); }
 
-function toggleCmpDates(){
-  const isRange = document.getElementById('cmp-mode').value==='range';
-  document.getElementById('cmp-dfrom-fg').style.display = isRange?'':'none';
-  document.getElementById('cmp-dto-fg').style.display   = isRange?'':'none';
-}
+
 
 function addCmpBroker(){
   const val = document.getElementById('cmp-brk-input').value.trim();
@@ -978,10 +979,10 @@ async function loadCmp(){
   if(!sym){ alert('Please select a stock symbol first.'); return; }
   if(!CMP_BROKERS.length){ alert('Please add at least one broker.'); return; }
 
-  const mode  = document.getElementById('cmp-mode').value;
   const dfrom = document.getElementById('cmp-dfrom').value;
   const dto   = document.getElementById('cmp-dto').value;
-  if(mode==='range' && (!dfrom||!dto)){ alert('Please select both Date From and Date To.'); return; }
+  if(!dfrom||!dto){ alert('Please select both Date From and Date To.'); return; }
+  const mode = 'range';
 
   document.getElementById('cmp-cnt').textContent='Loading…';
   document.getElementById('cmp-tbody').innerHTML=
@@ -1142,9 +1143,23 @@ function renderCmpRateCards(results){
   ).join('');
 }
 
+let CMP_DATA=[], cmpSortCol='broker', cmpSortAsc=true;
+
+function sortCmp(col){
+  if(cmpSortCol===col) cmpSortAsc=!cmpSortAsc;
+  else { cmpSortCol=col; cmpSortAsc=true; }
+  renderCmpTable(CMP_DATA);
+}
+
 function renderCmpTable(results){
+  CMP_DATA=[...results];
   const tb=document.getElementById('cmp-tbody');
   if(!results.length){tb.innerHTML='<tr><td colspan="6"><div class="empty">No data.</div></td></tr>';return;}
+  results=[...results].sort((a,b)=>{
+    let va=a[cmpSortCol], vb=b[cmpSortCol];
+    if(typeof va==='number') return cmpSortAsc?va-vb:vb-va;
+    return cmpSortAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
+  });
   function qtyRate(qty,rate,cls){
     return `<div class="brk-cell">
       <div class="m ${cls}">${fmt(qty)}</div>
