@@ -194,23 +194,47 @@ def compute_daily_volume(df):
     """
     Compute accurate daily volume per symbol from raw transactions.
     Called BEFORE dropping zero holdings — captures ALL brokers.
+    Includes LTP = max(Rate) and VWAP = total_buy_amt / total_buy_qty.
     Returns: DataFrame with one row per (Date, Stock Symbol)
     """
     grp = ["Date", "Stock Symbol"]
 
-    # Total buy per symbol per date (sum across ALL brokers)
-    buy_vol = (df.groupby(grp + ["Buyer"])["Quantity"].sum()
-                 .reset_index().rename(columns={"Buyer":"broker","Quantity":"buy_qty"}))
+    # Ensure Rate column exists (contractRate)
+    rate_col = "Rate (Rs)" if "Rate (Rs)" in df.columns else None
+
+    # Total buy per symbol per date
+    buy_vol = (df.groupby(grp + ["Buyer"])
+                 .agg(buy_qty=("Quantity","sum"),
+                      buy_amt=("Amount (Rs)","sum"))
+                 .reset_index()
+                 .rename(columns={"Buyer":"broker"}))
 
     # Total sell per symbol per date
     sell_vol = (df.groupby(grp + ["Seller"])["Quantity"].sum()
-                  .reset_index().rename(columns={"Seller":"broker","Quantity":"sel_qty"}))
+                  .reset_index()
+                  .rename(columns={"Seller":"broker","Quantity":"sel_qty"}))
 
     # Symbol-level totals
-    sym_buy = buy_vol.groupby(grp)["buy_qty"].sum().reset_index()
+    sym_buy = buy_vol.groupby(grp).agg(
+        buy_qty=("buy_qty","sum"),
+        buy_amt=("buy_amt","sum")
+    ).reset_index()
     sym_sel = sell_vol.groupby(grp)["sel_qty"].sum().reset_index()
     vol = sym_buy.merge(sym_sel, on=grp, how="outer").fillna(0)
     vol["total_volume"] = vol["buy_qty"] + vol["sel_qty"]
+
+    # VWAP = total buy amount / total buy qty
+    vol["vwap"] = (vol["buy_amt"] / vol["buy_qty"].replace(0, float("nan"))).round(2).fillna(0)
+
+    # LTP = max(Rate) per symbol per date from raw transactions
+    if rate_col:
+        ltp = (df.groupby(grp)[rate_col].max()
+                 .reset_index()
+                 .rename(columns={rate_col:"ltp"}))
+        vol = vol.merge(ltp, on=grp, how="left")
+        vol["ltp"] = vol["ltp"].fillna(0).round(2)
+    else:
+        vol["ltp"] = vol["vwap"]  # fallback to VWAP if no rate column
 
     # Top buyer per symbol per date
     top_buy = (buy_vol.sort_values("buy_qty", ascending=False)
@@ -225,7 +249,7 @@ def compute_daily_volume(df):
     vol = vol.merge(top_buy[grp+["top_buyer","top_buyer_qty"]], on=grp, how="left")
     vol = vol.merge(top_sel[grp+["top_seller","top_seller_qty"]], on=grp, how="left")
 
-    # Add broker names if available
+    # Broker names
     if "BuyerName" in df.columns:
         bnames = df[["Buyer","BuyerName"]].drop_duplicates().rename(
             columns={"Buyer":"top_buyer","BuyerName":"top_buyer_name"})
@@ -292,16 +316,19 @@ def upsert_daily_volume(supabase, vol_df, h_df):
         "total_buy_qty"   : int(r["buy_qty"]),
         "total_sel_qty"   : int(r["sel_qty"]),
         "total_volume"    : int(r["total_volume"]),
+        "total_buy_amt"   : float(round(r.get("buy_amt", 0), 2)),
+        "ltp"             : float(round(r.get("ltp", 0), 2)),
+        "vwap"            : float(round(r.get("vwap", 0), 2)),
         "top_buyer"       : int(r["top_buyer"]),
         "top_buyer_name"  : str(r.get("top_buyer_name","")),
         "top_buyer_qty"   : int(r["top_buyer_qty"]),
         "top_seller"      : int(r["top_seller"]),
         "top_seller_name" : str(r.get("top_seller_name","")),
         "top_seller_qty"  : int(r["top_seller_qty"]),
-        "top_holder"      : int(r["top_holder"]),
+        "top_holder"      : int(r.get("top_holder", 0)),
         "top_holder_name" : str(r.get("top_holder_name","")),
-        "top_holder_qty"  : int(r["top_holder_qty"]),
-        "top_holder_rate" : float(round(r["top_holder_rate"], 2)),
+        "top_holder_qty"  : int(r.get("top_holder_qty", 0)),
+        "top_holder_rate" : float(round(r.get("top_holder_rate", 0), 2)),
         "updated_at"      : datetime.now().isoformat(),
     } for _, r in vol_df.iterrows()]
 
@@ -503,25 +530,38 @@ def main():
     if vol_frames:
       try:
         all_vol = pd.concat(vol_frames, ignore_index=True)
-        # Re-aggregate: pick top buyer/seller by max qty per date+symbol
-        sym_buy = all_vol.groupby(["Date","Stock Symbol"])["buy_qty"].sum().reset_index()
-        sym_sel = all_vol.groupby(["Date","Stock Symbol"])["sel_qty"].sum().reset_index()
-        sym_vol = sym_buy.merge(sym_sel, on=["Date","Stock Symbol"], how="outer").fillna(0)
-        sym_vol["total_volume"] = sym_vol["buy_qty"] + sym_vol["sel_qty"]
-        # top buyer: broker with most buy_qty across all files for that date+symbol
-        top_b = (all_vol.sort_values("top_buyer_qty",ascending=False)
-                        .groupby(["Date","Stock Symbol"]).first()
-                        .reset_index()[["Date","Stock Symbol","top_buyer","top_buyer_name","top_buyer_qty"]])
-        top_s = (all_vol.sort_values("top_seller_qty",ascending=False)
-                        .groupby(["Date","Stock Symbol"]).first()
-                        .reset_index()[["Date","Stock Symbol","top_seller","top_seller_name","top_seller_qty"]])
-        sym_vol = sym_vol.merge(top_b, on=["Date","Stock Symbol"], how="left")
-        sym_vol = sym_vol.merge(top_s, on=["Date","Stock Symbol"], how="left")
+        grp = ["Date","Stock Symbol"]
+
+        # Sum qty/amt across all files per date+symbol
+        sym_agg = all_vol.groupby(grp).agg(
+            buy_qty      =("buy_qty",       "sum"),
+            buy_amt      =("buy_amt",        "sum"),
+            sel_qty      =("sel_qty",        "sum"),
+            total_volume =("total_volume",   "sum"),
+            ltp          =("ltp",            "max"),   # max contractRate = LTP
+        ).reset_index()
+        sym_agg["vwap"] = (sym_agg["buy_amt"] / sym_agg["buy_qty"].replace(0, float("nan"))).round(2).fillna(0)
+        sym_agg["total_volume"] = sym_agg["buy_qty"] + sym_agg["sel_qty"]
+
+        # Top buyer/seller: broker with most qty across all files
+        top_b = (all_vol.sort_values("top_buyer_qty", ascending=False)
+                        .drop_duplicates(subset=grp)
+                        [grp+["top_buyer","top_buyer_name","top_buyer_qty"]])
+        top_s = (all_vol.sort_values("top_seller_qty", ascending=False)
+                        .drop_duplicates(subset=grp)
+                        [grp+["top_seller","top_seller_name","top_seller_qty"]])
+
+        sym_vol = sym_agg.merge(top_b, on=grp, how="left")
+        sym_vol = sym_vol.merge(top_s, on=grp, how="left")
+
         if "Security Name" in all_vol.columns:
-            sn = all_vol[["Stock Symbol","Security Name"]].drop_duplicates()
+            sn = all_vol[["Stock Symbol","Security Name"]].drop_duplicates(subset=["Stock Symbol"])
             sym_vol = sym_vol.merge(sn, on="Stock Symbol", how="left")
+
+        # Final dedup just in case
+        sym_vol = sym_vol.drop_duplicates(subset=grp).reset_index(drop=True)
         del all_vol
-        # Build a combined agg df for top holder lookup
+
         all_agg = pd.concat(agg_frames_copy, ignore_index=True) if agg_frames_copy else pd.DataFrame()
         upsert_daily_volume(supabase, sym_vol, all_agg)
         del sym_vol, all_agg
@@ -912,7 +952,7 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
           <th onclick="sortCmp('ipo_qty')">IPO Sale ↕</th>
           <th onclick="sortCmp('bulk_qty')">Bulk Sale ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
           <th onclick="sortCmp('net_holding')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Holding Rate</span></th>
-          <th onclick="sortCmp('ltp')">LTP ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Last traded price</span></th>
+          <th onclick="sortCmp('ltp')">LTP / VWAP ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Last traded / avg price</span></th>
         </tr></thead>
         <tbody id="cmp-tbody">
           <tr><td colspan="6"><div class="empty">Select a symbol, add brokers, then click Compare.</div></td></tr>
@@ -1626,25 +1666,44 @@ async function loadCmp(){{
   document.getElementById('cmp-cnt').textContent=results.length+' brokers · '+sym+' · '+lbl;
   document.getElementById('cmp-table-title').textContent='Broker Comparison — '+sym+' · '+lbl;
 
-  // ── Fetch LTP: max avg_rate on the last date in range ──────────────────
-  let ltpVal = 0, ltpDate = dto;
+  // ── Fetch LTP from daily_volume table (max contractRate of the day) ────────
+  // Falls back to VWAP from holdings if daily_volume not yet populated
+  let ltpVal = 0, ltpDate = dto, ltpLabel = 'LTP';
   try{{
-    const {{data:ltpData}} = await sb.from('holdings')
-      .select('avg_rate,date')
+    // Try daily_volume table first (has true LTP = max contractRate)
+    const {{data:dvData, error:dvErr}} = await sb.from('daily_volume')
+      .select('ltp,vwap,date')
       .eq('symbol', sym)
       .lte('date', dto)
       .gte('date', dfrom)
       .order('date', {{ascending:false}})
-      .order('avg_rate', {{ascending:false}})
       .limit(1);
-    if(ltpData && ltpData.length){{
-      ltpVal  = ltpData[0].avg_rate || 0;
-      ltpDate = ltpData[0].date;
+    if(!dvErr && dvData && dvData.length && dvData[0].ltp > 0){{
+      ltpVal   = dvData[0].ltp;
+      ltpDate  = dvData[0].date;
+      ltpLabel = 'LTP';
+    }} else {{
+      // Fallback: compute VWAP from holdings table
+      const {{data:hData}} = await sb.from('holdings')
+        .select('buy_qty,buy_amt,date')
+        .eq('symbol', sym)
+        .lte('date', dto)
+        .gte('date', dfrom)
+        .order('date', {{ascending:false}})
+        .limit(500);
+      if(hData && hData.length){{
+        ltpDate = hData[0].date;
+        const dayRows = hData.filter(r=>r.date===ltpDate);
+        const totalAmt = dayRows.reduce((s,r)=>s+(r.buy_amt||0),0);
+        const totalQty = dayRows.reduce((s,r)=>s+(r.buy_qty||0),0);
+        ltpVal   = totalQty>0 ? Math.round((totalAmt/totalQty)*100)/100 : 0;
+        ltpLabel = 'VWAP';
+      }}
     }}
   }}catch(e){{console.error('LTP fetch error:',e);}}
 
-  // Attach LTP to every result row (same value for all brokers — it's per script)
-  results.forEach(r=>{{ r.ltp=ltpVal; r.ltp_date=ltpDate; }});
+  // Attach to every row
+  results.forEach(r=>{{ r.ltp=ltpVal; r.ltp_date=ltpDate; r.ltp_label=ltpLabel; }});
 
   renderCmpChart(results);
   renderCmpTable(results);
@@ -1748,7 +1807,7 @@ function renderCmpTable(results){{
     <td>${{qtyRate(r.bulk_qty,r.bulk_rate,'')}}</td>
     <td>${{qtyRate(r.net_holding,r.holding_rate,r.net_holding>=0?'pos':'neg')}}</td>
     <td><div class="m" style="color:var(--amber);font-size:14px;font-weight:600">Rs ${{fmtf(r.ltp||0)}}</div>
-        <div style="font-size:10px;color:var(--muted)">${{r.ltp_date||'—'}}</div></td>
+        <div style="font-size:10px;color:var(--muted)">${{r.ltp_label||'LTP'}} · ${{r.ltp_date||'—'}}</div></td>
   </tr>`).join('');
 }}
 
