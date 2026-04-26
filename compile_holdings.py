@@ -912,6 +912,7 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
           <th onclick="sortCmp('ipo_qty')">IPO Sale ↕</th>
           <th onclick="sortCmp('bulk_qty')">Bulk Sale ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
           <th onclick="sortCmp('net_holding')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Holding Rate</span></th>
+          <th onclick="sortCmp('ltp')">LTP ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Last traded price</span></th>
         </tr></thead>
         <tbody id="cmp-tbody">
           <tr><td colspan="6"><div class="empty">Select a symbol, add brokers, then click Compare.</div></td></tr>
@@ -1625,6 +1626,26 @@ async function loadCmp(){{
   document.getElementById('cmp-cnt').textContent=results.length+' brokers · '+sym+' · '+lbl;
   document.getElementById('cmp-table-title').textContent='Broker Comparison — '+sym+' · '+lbl;
 
+  // ── Fetch LTP: max avg_rate on the last date in range ──────────────────
+  let ltpVal = 0, ltpDate = dto;
+  try{{
+    const {{data:ltpData}} = await sb.from('holdings')
+      .select('avg_rate,date')
+      .eq('symbol', sym)
+      .lte('date', dto)
+      .gte('date', dfrom)
+      .order('date', {{ascending:false}})
+      .order('avg_rate', {{ascending:false}})
+      .limit(1);
+    if(ltpData && ltpData.length){{
+      ltpVal  = ltpData[0].avg_rate || 0;
+      ltpDate = ltpData[0].date;
+    }}
+  }}catch(e){{console.error('LTP fetch error:',e);}}
+
+  // Attach LTP to every result row (same value for all brokers — it's per script)
+  results.forEach(r=>{{ r.ltp=ltpVal; r.ltp_date=ltpDate; }});
+
   renderCmpChart(results);
   renderCmpTable(results);
 }}
@@ -1726,6 +1747,8 @@ function renderCmpTable(results){{
     <td><span class="ipo">${{fmt(r.ipo_qty)}}</span></td>
     <td>${{qtyRate(r.bulk_qty,r.bulk_rate,'')}}</td>
     <td>${{qtyRate(r.net_holding,r.holding_rate,r.net_holding>=0?'pos':'neg')}}</td>
+    <td><div class="m" style="color:var(--amber);font-size:14px;font-weight:600">Rs ${{fmtf(r.ltp||0)}}</div>
+        <div style="font-size:10px;color:var(--muted)">${{r.ltp_date||'—'}}</div></td>
   </tr>`).join('');
 }}
 
