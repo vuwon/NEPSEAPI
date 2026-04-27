@@ -40,6 +40,8 @@ API_COL_MAP = {
     "buyerBrokerName" : "BuyerName",
     "sellerBrokerName": "SellerName",
     "securityName"    : "Security Name",
+    "contractId"      : "ContractId",   # used for LTP: highest contractId = last trade
+    "tradeTime"       : "TradeTime",    # backup for LTP ordering
 }
 
 def clean_col(c):
@@ -226,15 +228,28 @@ def compute_daily_volume(df):
     # VWAP = total buy amount / total buy qty
     vol["vwap"] = (vol["buy_amt"] / vol["buy_qty"].replace(0, float("nan"))).round(2).fillna(0)
 
-    # LTP = max(Rate) per symbol per date from raw transactions
-    if rate_col:
-        ltp = (df.groupby(grp)[rate_col].max()
-                 .reset_index()
-                 .rename(columns={rate_col:"ltp"}))
+    # LTP = contractRate of the row with highest contractId per symbol per date
+    # contractId is a sequential number — highest = last transaction of the day
+    if "ContractId" in df.columns:
+        # Get the rate of the last transaction (max contractId) per symbol per date
+        df["ContractId"] = pd.to_numeric(df["ContractId"], errors="coerce").fillna(0)
+        ltp_idx = df.groupby(grp)["ContractId"].idxmax()
+        ltp = df.loc[ltp_idx, grp + ["Rate (Rs)"]].rename(columns={"Rate (Rs)": "ltp"})
         vol = vol.merge(ltp, on=grp, how="left")
-        vol["ltp"] = vol["ltp"].fillna(0).round(2)
+        vol["ltp"] = vol["ltp"].fillna(vol["vwap"]).round(2)
+        print(f"    LTP computed from contractId for {len(vol)} symbols")
+    elif "TradeTime" in df.columns:
+        # Fallback: use tradeTime to find last transaction
+        df["TradeTime"] = pd.to_datetime(df["TradeTime"], errors="coerce")
+        ltp_idx = df.groupby(grp)["TradeTime"].idxmax()
+        ltp = df.loc[ltp_idx, grp + ["Rate (Rs)"]].rename(columns={"Rate (Rs)": "ltp"})
+        vol = vol.merge(ltp, on=grp, how="left")
+        vol["ltp"] = vol["ltp"].fillna(vol["vwap"]).round(2)
+        print(f"    LTP computed from tradeTime for {len(vol)} symbols")
     else:
-        vol["ltp"] = vol["vwap"]  # fallback to VWAP if no rate column
+        # Final fallback: VWAP
+        vol["ltp"] = vol["vwap"]
+        print(f"    LTP fallback to VWAP (no contractId/tradeTime found)")
 
     # Top buyer per symbol per date
     top_buy = (buy_vol.sort_values("buy_qty", ascending=False)
@@ -538,7 +553,7 @@ def main():
             buy_amt      =("buy_amt",        "sum"),
             sel_qty      =("sel_qty",        "sum"),
             total_volume =("total_volume",   "sum"),
-            ltp          =("ltp",            "max"),   # max contractRate = LTP
+            ltp          =("ltp",            "last"),  # last contractId's rate = true LTP
         ).reset_index()
         sym_agg["vwap"] = (sym_agg["buy_amt"] / sym_agg["buy_qty"].replace(0, float("nan"))).round(2).fillna(0)
         sym_agg["total_volume"] = sym_agg["buy_qty"] + sym_agg["sel_qty"]
@@ -952,7 +967,7 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
           <th onclick="sortCmp('ipo_qty')">IPO Sale ↕</th>
           <th onclick="sortCmp('bulk_qty')">Bulk Sale ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
           <th onclick="sortCmp('net_holding')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Holding Rate</span></th>
-          <th onclick="sortCmp('ltp')">LTP / VWAP ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Last traded / avg price</span></th>
+          <th onclick="sortCmp('ltp')">LTP ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Last traded price</span></th>
         </tr></thead>
         <tbody id="cmp-tbody">
           <tr><td colspan="6"><div class="empty">Select a symbol, add brokers, then click Compare.</div></td></tr>
@@ -1079,7 +1094,7 @@ async function loadMarketSummary(){{
         top_buyer       : tb.broker||'—',
         top_buyer_name  : tb.broker_name||'',
         top_buyer_qty   : tb.buy_qty||0,
-        top_buyer_rate  : tb.avg_rate||0,
+        top_buyer_rate  : (tb.buy_qty||0)>0 ? Math.round(((tb.buy_amt||0)/(tb.buy_qty||1))*100)/100 : 0,
         top_seller      : ts.broker||'—',
         top_seller_name : ts.broker_name||'',
         top_seller_qty  : ts.total_sale_qty||0,
@@ -1211,7 +1226,7 @@ async function openDetail(sym){{
         date           : d.date,
         volume         : d.buy_qty,
         total_sale_qty : d.total_sale_qty,
-        top_buyer      : tb.broker||'—', top_buyer_name : tb.broker_name||'', top_buyer_qty  : tb.buy_qty||0,       top_buyer_rate : tb.avg_rate||0,
+        top_buyer      : tb.broker||'—', top_buyer_name : tb.broker_name||'', top_buyer_qty  : tb.buy_qty||0,       top_buyer_rate : (tb.buy_qty||0)>0?Math.round(((tb.buy_amt||0)/(tb.buy_qty||1))*100)/100:0,
         top_seller     : ts.broker||'—', top_seller_name: ts.broker_name||'', top_seller_qty : ts.total_sale_qty||0, top_seller_rate: (ts.bulk_sale_qty||0)>0?Math.round(((ts.bulk_sale_amt||0)/(ts.bulk_sale_qty||1))*100)/100:(ts.avg_rate||0),
         top_holder     : th.broker||'—', top_holder_name: th.broker_name||'', top_holder_qty : th.holding_qty||0,
         avg_rate       : th.avg_rate||0,
@@ -1697,7 +1712,7 @@ async function loadCmp(){{
         const totalAmt = dayRows.reduce((s,r)=>s+(r.buy_amt||0),0);
         const totalQty = dayRows.reduce((s,r)=>s+(r.buy_qty||0),0);
         ltpVal   = totalQty>0 ? Math.round((totalAmt/totalQty)*100)/100 : 0;
-        ltpLabel = 'VWAP';
+        ltpLabel = 'LTP';
       }}
     }}
   }}catch(e){{console.error('LTP fetch error:',e);}}
