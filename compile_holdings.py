@@ -736,6 +736,18 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
 .wsym:hover{{text-decoration:underline}}
 .wtrack{{flex:1;height:22px;background:var(--s2);border-radius:4px;overflow:hidden;border:1px solid var(--border)}}
 .wfill{{height:100%;background:linear-gradient(90deg,var(--cyan2),var(--cyan));display:flex;align-items:center;padding-left:8px;font-family:var(--mono);font-size:11px;color:#fff;min-width:2px}}
+.vol-item{{margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden}}
+.vol-item-hdr{{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--s2);cursor:pointer;user-select:none}}
+.vol-item-hdr:hover{{background:var(--border)}}
+.vol-rank{{font-family:var(--mono);font-size:12px;color:var(--muted);width:24px;flex-shrink:0}}
+.vol-sym{{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--cyan);width:70px;flex-shrink:0}}
+.vol-bar-wrap{{flex:1;display:flex;align-items:center;gap:8px}}
+.vol-holders{{padding:8px 12px;display:none;background:var(--s1)}}
+.vol-holders.open{{display:block}}
+.holder-table{{width:100%;border-collapse:collapse;font-size:12px}}
+.holder-table th{{padding:5px 8px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;text-align:left;border-bottom:1px solid var(--border)}}
+.holder-table td{{padding:5px 8px;border-bottom:1px solid var(--border);font-family:var(--mono)}}
+.holder-table tr:last-child td{{border-bottom:none}}
 /* broker cell with name below */
 .brk-cell{{display:flex;flex-direction:column;gap:2px}}
 @media(max-width:768px){{.stats{{grid-template-columns:repeat(2,1fr)}}.fp{{flex-direction:column}}.fg{{min-width:100%}}.spotlight-grid{{grid-template-columns:repeat(2,1fr)}}}}
@@ -905,10 +917,16 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
       </div>
     </div>
 
-    <!-- Weekly top 10 -->
+    <!-- Daily top 10 + top 5 holders -->
+    <div class="cw" style="margin-bottom:14px">
+      <div class="ctitle" id="daily-vol-title">Top 10 scripts by volume — today</div>
+      <div id="daily-vol-list"><div class="empty"><div class="spinner"></div>Loading…</div></div>
+    </div>
+
+    <!-- Weekly top 10 + top 5 holders -->
     <div class="cw">
       <div class="ctitle">Top 10 scripts by volume — last 5 trading days</div>
-      <div class="weekly-bars" id="weekly-bars"><div class="empty"><div class="spinner"></div>Loading…</div></div>
+      <div id="weekly-bars"><div class="empty"><div class="spinner"></div>Loading…</div></div>
     </div>
 
   </div>
@@ -1282,7 +1300,7 @@ function renderDetTable(){{
 // ── WEEKLY ─────────────────────────────────────────────────────────────────
 async function loadWeekly(){{
   try {{
-    // Step 1: Get last 5 distinct trading dates
+    // ── Get last 5 distinct trading dates ─────────────────────────────────
     let dateSet=new Set(), off=0;
     while(dateSet.size<5){{
       const {{data,error}}=await sb.from('holdings')
@@ -1294,41 +1312,150 @@ async function loadWeekly(){{
       if(data.length<500) break;
     }}
     const last5=[...dateSet].sort().reverse().slice(0,5);
-    if(!last5.length){{document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';return;}}
+    if(!last5.length){{
+      document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';
+      document.getElementById('daily-vol-list').innerHTML='<div class="empty">No data.</div>';
+      return;
+    }}
+    const today=last5[0];
+    document.getElementById('daily-vol-title').textContent=
+      'Top 10 scripts by volume — '+today;
 
-    // Step 2: Fetch ALL buy_qty rows for those 5 dates (paginated)
-    let all=[], offset=0, limit=1000;
+    // ── Fetch buy_qty for last 5 dates ────────────────────────────────────
+    let allW=[], off2=0, lim=1000;
     while(true){{
       const {{data,error}}=await sb.from('holdings')
-        .select('symbol,buy_qty,date')
-        .in('date',last5)
-        .range(offset,offset+limit-1);
+        .select('symbol,buy_qty,date').in('date',last5)
+        .range(off2,off2+lim-1);
       if(error) throw error;
-      all.push(...(data||[]));
-      if(!data||data.length<limit) break;
-      offset+=limit;
+      allW.push(...(data||[]));
+      if(!data||data.length<lim) break;
+      off2+=lim;
     }}
 
-    // Step 3: Sum buy_qty per symbol across ALL 5 dates
-    const sv={{}};
-    for(const r of all){{if(!sv[r.symbol])sv[r.symbol]=0;sv[r.symbol]+=(r.buy_qty||0);}}
-    const top10=Object.entries(sv).sort((a,b)=>b[1]-a[1]).slice(0,10);
-    if(!top10.length){{document.getElementById('weekly-bars').innerHTML='<div class="empty">No data.</div>';return;}}
-    const maxV=top10[0][1];
+    // ── Aggregate weekly volumes ──────────────────────────────────────────
+    const svW={{}};
+    for(const r of allW){{if(!svW[r.symbol])svW[r.symbol]=0;svW[r.symbol]+=(r.buy_qty||0);}}
+    const top10W=Object.entries(svW).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+    // ── Aggregate daily volumes ───────────────────────────────────────────
+    const svD={{}};
+    for(const r of allW.filter(r=>r.date===today)){{
+      if(!svD[r.symbol])svD[r.symbol]=0;svD[r.symbol]+=(r.buy_qty||0);
+    }}
+    const top10D=Object.entries(svD).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+    // ── Fetch top 5 holders for each top symbol ───────────────────────────
+    const weeklySyms = top10W.map(([s])=>s);
+    const dailySyms  = top10D.map(([s])=>s);
+    const allSyms    = [...new Set([...weeklySyms,...dailySyms])];
+
+    // Weekly holders: from cumulative table (all-time net holding)
+    // But filtered for the date range — aggregate from holdings table
+    const weeklyHolders={{}};
+    const dailyHolders={{}};
+
+    for(const sym of allSyms){{
+      // Weekly: sum holding_qty per broker across last 5 dates
+      const wRows = allW.filter(r=>r.symbol===sym);
+      // Need full holdings data for avg_rate — fetch separately
+      const {{data:hFull}} = await sb.from('holdings')
+        .select('broker,broker_name,buy_qty,buy_amt,bulk_sale_qty,bulk_sale_amt,holding_qty,avg_rate,date')
+        .eq('symbol',sym).in('date',last5)
+        .order('holding_qty',{{ascending:false}});
+
+      if(hFull && hFull.length){{
+        // Weekly: aggregate per broker across 5 days
+        const bmap={{}};
+        for(const r of hFull){{
+          if(!bmap[r.broker]) bmap[r.broker]={{broker:r.broker,name:r.broker_name||'',
+            buy_qty:0,buy_amt:0,bulk_sale_qty:0,bulk_sale_amt:0,net_holding:0}};
+          bmap[r.broker].buy_qty       +=(r.buy_qty||0);
+          bmap[r.broker].buy_amt       +=(r.buy_amt||0);
+          bmap[r.broker].bulk_sale_qty +=(r.bulk_sale_qty||0);
+          bmap[r.broker].bulk_sale_amt +=(r.bulk_sale_amt||0);
+          bmap[r.broker].net_holding   +=(r.holding_qty||0);
+        }}
+        weeklyHolders[sym] = Object.values(bmap)
+          .map(b=>{{
+            const rate = b.net_holding>0
+              ? Math.round(((b.buy_amt-b.bulk_sale_amt)/b.net_holding)*100)/100 : 0;
+            return {{...b, avg_rate:rate}};
+          }})
+          .sort((a,b)=>b.net_holding-a.net_holding).slice(0,5);
+
+        // Daily: only today's date
+        const dRows = hFull.filter(r=>r.date===today);
+        dailyHolders[sym] = dRows
+          .sort((a,b)=>(b.holding_qty||0)-(a.holding_qty||0))
+          .slice(0,5)
+          .map(r=>{{return {{broker:r.broker,name:r.broker_name||'',
+            net_holding:r.holding_qty||0,avg_rate:r.avg_rate||0}};}});
+      }}
+    }}
+
+    // ── Render helper ─────────────────────────────────────────────────────
     const medals=['🥇','🥈','🥉'];
+    function renderVolList(top10, holders, containerId, maxV){{
+      document.getElementById(containerId).innerHTML = top10.map(([sym,vol],i)=>{{
+        const pct=Math.max(2,vol/maxV*100);
+        const hList = holders[sym]||[];
+        const holderRows = hList.length
+          ? hList.map((h,j)=>`<tr>
+              <td style="color:var(--muted)">${{medals[j]||'#'+(j+1)}}</td>
+              <td><span class="brk">${{h.broker}}</span></td>
+              <td class="bname">${{h.name}}</td>
+              <td class="pos">${{fmt(h.net_holding)}}</td>
+              <td style="color:var(--amber)">Rs ${{fmtf(h.avg_rate)}}</td>
+            </tr>`).join('')
+          : '<tr><td colspan="5" class="empty" style="padding:8px">No data</td></tr>';
+        return `<div class="vol-item">
+          <div class="vol-item-hdr" onclick="toggleHolder(this)">
+            <div class="vol-rank">${{medals[i]||'#'+(i+1)}}</div>
+            <div class="vol-sym">${{sym}}</div>
+            <div class="vol-bar-wrap">
+              <div class="wtrack"><div class="wfill" style="width:${{pct}}%"></div></div>
+              <span class="m pos">${{fmt(vol)}}</span>
+            </div>
+            <span style="font-size:11px;color:var(--muted);margin-left:8px">▼ Top holders</span>
+          </div>
+          <div class="vol-holders">
+            <table class="holder-table">
+              <thead><tr>
+                <th>#</th><th>Broker</th><th>Name</th>
+                <th>Net Holding</th><th>Avg Rate</th>
+              </tr></thead>
+              <tbody>${{holderRows}}</tbody>
+            </table>
+          </div>
+        </div>`;
+      }}).join('');
+    }}
+
+    const maxW = top10W.length ? top10W[0][1] : 1;
+    const maxD = top10D.length ? top10D[0][1] : 1;
     const dateRange=last5[last5.length-1]+' → '+last5[0];
     const titleEl=document.querySelector('.weekly-section .ctitle');
     if(titleEl) titleEl.textContent='Top 10 scripts by volume — '+dateRange+' ('+last5.length+' trading days)';
-    document.getElementById('weekly-bars').innerHTML=top10.map(([sym,vol],i)=>{{
-      const pct=Math.max(2,vol/maxV*100);
-      return `<div class="wrow">
-        <div class="wrank">${{medals[i]||'#'+(i+1)}}</div>
-        <div class="wsym" onclick="openDetail('${{sym}}')">${{sym}}</div>
-        <div class="wtrack"><div class="wfill" style="width:${{pct}}%">${{fmt(vol)}}</div></div>
-      </div>`;
-    }}).join('');
-  }}catch(e){{document.getElementById('weekly-bars').innerHTML='<div class="empty">Error: '+e.message+'</div>';}}
+
+    renderVolList(top10D, dailyHolders, 'daily-vol-list',  maxD);
+    renderVolList(top10W, weeklyHolders, 'weekly-bars', maxW);
+
+  }}catch(e){{
+    document.getElementById('weekly-bars').innerHTML='<div class="empty">Error: '+e.message+'</div>';
+    document.getElementById('daily-vol-list').innerHTML='<div class="empty">Error: '+e.message+'</div>';
+    console.error(e);
+  }}
 }}
+
+function toggleHolder(hdr){{
+  const panel=hdr.nextElementSibling;
+  panel.classList.toggle('open');
+  const arrow=hdr.querySelector('span:last-child');
+  arrow.textContent=panel.classList.contains('open')?'▲ Top holders':'▼ Top holders';
+}}
+
+
 function setStatus(msg,isError=false){{
   const el=document.getElementById('status');
   el.innerHTML=msg;
