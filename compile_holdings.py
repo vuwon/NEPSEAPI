@@ -952,7 +952,7 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
             <th onclick="sortDet('top_buyer_qty')">Top Buyer ↕</th>
             <th onclick="sortDet('top_seller_qty')">Top Seller ↕</th>
             <th onclick="sortDet('top_holder_qty')">Top Holder ↕</th>
-            <th onclick="sortDet('avg_rate')">Avg Rate ↕</th>
+            <th onclick="sortDet('ltp')">LTP ↕</th>
           </tr></thead>
           <tbody id="dp-tbody"></tbody>
         </table></div>
@@ -1245,6 +1245,7 @@ async function loadMarketSummary(){{
         top_holder_name : th.broker_name||'',
         top_holder_qty  : th.holding_qty||0,
         avg_rate        : th.avg_rate||0,
+        ltp             : 0,  // filled below from daily_volume
       }};
     }}).sort((a,b)=>b.volume-a.volume);
 
@@ -1372,6 +1373,7 @@ async function openDetail(sym){{
         top_seller     : ts.broker||'—', top_seller_name: ts.broker_name||'', top_seller_qty : ts.total_sale_qty||0, top_seller_rate: (ts.bulk_sale_qty||0)>0?Math.round(((ts.bulk_sale_amt||0)/(ts.bulk_sale_qty||1))*100)/100:(ts.avg_rate||0),
         top_holder     : th.broker||'—', top_holder_name: th.broker_name||'', top_holder_qty : th.holding_qty||0,
         avg_rate       : th.avg_rate||0,
+        ltp            : 0,
       }};
     }});
 
@@ -1381,6 +1383,18 @@ async function openDetail(sym){{
     const rkMap={{}};
     ranked.forEach(r=>rkMap[r.date]=r.rank);
     DET_DATA.forEach(r=>r.rank=rkMap[r.date]);
+
+    // Fetch LTP from daily_volume for each date
+    try{{
+      const allDates=DET_DATA.map(r=>r.date);
+      const {{data:lvData}}=await sb.from('daily_volume')
+        .select('date,ltp').eq('symbol',sym).in('date',allDates);
+      if(lvData && lvData.length){{
+        const ltpMap={{}};
+        lvData.forEach(r=>ltpMap[r.date]=r.ltp||0);
+        DET_DATA.forEach(r=>r.ltp=ltpMap[r.date]||0);
+      }}
+    }}catch(e){{console.error('LTP fetch error:',e);}}
 
     // Default sort: by date descending
     detCol='date'; detAsc=false;
@@ -1417,7 +1431,8 @@ function renderDetTable(){{
       <td>${{rankBadge(r.rank)}}</td>
       <td>${{brkCell(r.top_buyer,r.top_buyer_name,r.top_buyer_qty,'',r.top_buyer_rate)}}</td>
       <td>${{brkCell(r.top_seller,r.top_seller_name,r.top_seller_qty,'sell',r.top_seller_rate)}}</td>
-      <td>${{brkCell(r.top_holder,r.top_holder_name,r.top_holder_qty,'hold',r.avg_rate)}}</td>
+       <td>${{brkCell(r.top_holder,r.top_holder_name,r.top_holder_qty,'hold',r.avg_rate)}}</td>
+       <td class="m" style="color:var(--amber);font-weight:600">Rs ${{fmtf(r.ltp||0)}}</td>
     </tr>`).join('');
 }}
 
