@@ -1034,6 +1034,29 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
         </tbody>
       </table></div>
     </div>
+
+    <!-- Common stocks table -->
+    <div class="tw" style="margin-top:14px">
+      <div class="th2">
+        <span class="ttitle">Common stocks — top by buy volume among selected brokers</span>
+        <span class="tcnt" id="cs-cnt">—</span>
+      </div>
+      <div class="tscroll"><table>
+        <thead><tr>
+          <th onclick="sortCs('rank')">Rank ↕</th>
+          <th>Symbol</th>
+          <th onclick="sortCs('total_buy_qty')">Buy Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Buy Rate</span></th>
+          <th onclick="sortCs('total_sale_qty')">Sell Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Sell Rate</span></th>
+          <th onclick="sortCs('total_ipo_qty')">IPO Sale ↕</th>
+          <th onclick="sortCs('net_holding')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortCs('broker_count')">Brokers ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Count</span></th>
+        </tr></thead>
+        <tbody id="cs-tbody">
+          <tr><td colspan="7"><div class="empty">Add brokers, select date range and click Compare.</div></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
   </div>
 
 </div>
@@ -1799,6 +1822,7 @@ init();
 // ── BROKER COMPARISON ───────────────────────────────────────────────────────
 let CMP_BROKERS = [];
 let cmpChart = null;
+let CS_DATA = [], csSortCol = 'total_buy_qty', csSortAsc = false;
 
 function initCmp(){{ renderCmpTags(); }}
 
@@ -1830,6 +1854,8 @@ function clearCmpBrokers(){{
   document.getElementById('cmp-rate-cards').innerHTML='<div class="empty">Add brokers and click Compare.</div>';
   if(cmpChartQty){{ cmpChartQty.destroy(); cmpChartQty=null; }}
   document.getElementById('cmp-cnt').textContent='—';
+  document.getElementById('cs-cnt').textContent='—';
+  document.getElementById('cs-tbody').innerHTML='<tr><td colspan="7"><div class="empty">Add brokers and click Compare.</div></td></tr>';
 }}
 
 function renderCmpTags(){{
@@ -1988,6 +2014,121 @@ async function loadCmp(){{
 
   renderCmpChart(results);
   renderCmpTable(results);
+  await buildCommonStocks(sym, brokerNums, dfrom, dto);
+}}
+
+function sortCs(col){{
+  if(csSortCol===col) csSortAsc=!csSortAsc; else{{csSortCol=col;csSortAsc=false;}}
+  renderCsTable(CS_DATA);
+}}
+
+async function buildCommonStocks(sym, brokerNums, dfrom, dto){{
+  document.getElementById('cs-cnt').textContent='Loading…';
+  document.getElementById('cs-tbody').innerHTML=
+    '<tr><td colspan="7"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
+  try{{
+    // Fetch all holdings for selected brokers in date range — any symbol
+    let all=[], off=0, lim=1000;
+    while(true){{
+      let q=sb.from('holdings').select(
+        'symbol,broker,buy_qty,buy_amt,total_sale_qty,ipo_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty,avg_rate'
+      ).in('broker',brokerNums)
+       .gte('date',dfrom).lte('date',dto)
+       .range(off,off+lim-1);
+      const {{data,error}}=await q;
+      if(error) throw error;
+      all.push(...(data||[]));
+      if(!data||data.length<lim) break;
+      off+=lim;
+    }}
+
+    if(!all.length){{
+      document.getElementById('cs-cnt').textContent='No data';
+      document.getElementById('cs-tbody').innerHTML=
+        '<tr><td colspan="7"><div class="empty">No data for selected brokers in this date range.</div></td></tr>';
+      return;
+    }}
+
+    // Aggregate per symbol across all selected brokers
+    const symMap={{}};
+    for(const r of all){{
+      const s=r.symbol;
+      if(!symMap[s]) symMap[s]={{
+        symbol:s, total_buy_qty:0, buy_amt:0,
+        total_sale_qty:0, total_ipo_qty:0,
+        total_bulk_qty:0, bulk_amt:0,
+        net_holding:0, brokers:new Set()
+      }};
+      symMap[s].total_buy_qty  +=(r.buy_qty||0);
+      symMap[s].buy_amt        +=(r.buy_amt||0);
+      symMap[s].total_sale_qty +=(r.total_sale_qty||0);
+      symMap[s].total_ipo_qty  +=(r.ipo_sale_qty||0);
+      symMap[s].total_bulk_qty +=(r.bulk_sale_qty||0);
+      symMap[s].bulk_amt       +=(r.bulk_sale_amt||0);
+      symMap[s].net_holding    +=(r.holding_qty||0);
+      symMap[s].brokers.add(r.broker);
+    }}
+
+    CS_DATA = Object.values(symMap).map((s,i)=>{{
+      const avgBuy  = s.total_buy_qty>0  ? Math.round((s.buy_amt/s.total_buy_qty)*100)/100   : 0;
+      const avgSell = s.total_bulk_qty>0 ? Math.round((s.bulk_amt/s.total_bulk_qty)*100)/100 : 0;
+      const avgHold = s.net_holding>0    ? Math.round(((s.buy_amt-s.bulk_amt)/s.net_holding)*100)/100 : 0;
+      return {{
+        symbol        : s.symbol,
+        total_buy_qty : s.total_buy_qty,
+        avg_buy_rate  : avgBuy,
+        total_sale_qty: s.total_sale_qty,
+        avg_sell_rate : avgSell,
+        total_ipo_qty : s.total_ipo_qty,
+        net_holding   : s.net_holding,
+        avg_rate      : avgHold,
+        broker_count  : s.brokers.size,
+        rank          : 0,
+      }};
+    }}).sort((a,b)=>b.total_buy_qty-a.total_buy_qty);
+
+    // Assign rank by buy volume
+    CS_DATA.forEach((r,i)=>r.rank=i+1);
+
+    document.getElementById('cs-cnt').textContent=
+      CS_DATA.length+' symbols · '+brokerNums.length+' brokers · '+dfrom+' → '+dto;
+    renderCsTable(CS_DATA);
+
+  }}catch(e){{
+    console.error('Common stocks error:',e);
+    document.getElementById('cs-tbody').innerHTML=
+      '<tr><td colspan="7"><div class="empty">Error: '+e.message+'</div></td></tr>';
+  }}
+}}
+
+function renderCsTable(data){{
+  const sorted=[...data].sort((a,b)=>{{
+    let va=a[csSortCol],vb=b[csSortCol];
+    if(typeof va==='number') return csSortAsc?va-vb:vb-va;
+    return csSortAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
+  }});
+  const tb=document.getElementById('cs-tbody');
+  if(!sorted.length){{tb.innerHTML='<tr><td colspan="7"><div class="empty">No data.</div></td></tr>';return;}}
+  const medals=['🥇','🥈','🥉'];
+  tb.innerHTML=sorted.map(r=>{{
+    function qr(qty,rate,cls){{
+      return '<div class="brk-cell">'
+        +'<div class="m '+cls+'">'+fmt(qty)+'</div>'
+        +'<div class="m" style="color:var(--amber);font-size:10px">Rs '+fmtf(rate)+'</div>'
+        +'</div>';
+    }}
+    const rk=r.rank; const medal=medals[rk-1]||'#'+rk;
+    const nhcls=r.net_holding>=0?'pos':'neg';
+    return '<tr>'
+      +'<td class="m" style="color:var(--muted)">'+medal+'</td>'
+      +'<td class="sym">'+r.symbol+'</td>'
+      +'<td>'+qr(r.total_buy_qty,r.avg_buy_rate,'pos')+'</td>'
+      +'<td>'+qr(r.total_sale_qty,r.avg_sell_rate,'neg')+'</td>'
+      +'<td><span class="ipo">'+fmt(r.total_ipo_qty)+'</span></td>'
+      +'<td>'+qr(r.net_holding,r.avg_rate,nhcls)+'</td>'
+      +'<td><span class="brk">'+r.broker_count+'</span></td>'
+      +'</tr>';
+  }}).join('');
 }}
 
 function renderCmpChart(results){{
