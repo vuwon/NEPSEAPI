@@ -1511,7 +1511,7 @@ async function loadWeekly(){{
       const wRows = allW.filter(r=>r.symbol===sym);
       // Need full holdings data for avg_rate — fetch separately
       const {{data:hFull}} = await sb.from('holdings')
-        .select('broker,broker_name,buy_qty,buy_amt,bulk_sale_qty,bulk_sale_amt,holding_qty,avg_rate,date')
+        .select('broker,broker_name,buy_qty,buy_amt,total_sale_qty,ipo_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty,avg_rate,date')
         .eq('symbol',sym).in('date',last5)
         .order('holding_qty',{{ascending:false}});
 
@@ -1520,18 +1520,25 @@ async function loadWeekly(){{
         const bmap={{}};
         for(const r of hFull){{
           if(!bmap[r.broker]) bmap[r.broker]={{broker:r.broker,name:r.broker_name||'',
-            buy_qty:0,buy_amt:0,bulk_sale_qty:0,bulk_sale_amt:0,net_holding:0}};
+            buy_qty:0,buy_amt:0,sale_qty:0,bulk_sale_qty:0,bulk_sale_amt:0,net_holding:0}};
           bmap[r.broker].buy_qty       +=(r.buy_qty||0);
           bmap[r.broker].buy_amt       +=(r.buy_amt||0);
+          bmap[r.broker].sale_qty      +=(r.total_sale_qty||0);
           bmap[r.broker].bulk_sale_qty +=(r.bulk_sale_qty||0);
           bmap[r.broker].bulk_sale_amt +=(r.bulk_sale_amt||0);
           bmap[r.broker].net_holding   +=(r.holding_qty||0);
         }}
         weeklyHolders[sym] = Object.values(bmap)
           .map(b=>{{
-            const rate = b.net_holding>0
+            const holdRate = b.net_holding>0
               ? Math.round(((b.buy_amt-b.bulk_sale_amt)/b.net_holding)*100)/100 : 0;
-            return {{...b, avg_rate:rate}};
+            return {{
+              broker:b.broker,
+              buy_qty:b.buy_qty, buy_amt:b.buy_amt,
+              sale_qty:b.sale_qty||0,
+              bulk_qty:b.bulk_sale_qty||0, bulk_sale_amt:b.bulk_sale_amt||0,
+              net_holding:b.net_holding, avg_rate:holdRate
+            }};
           }})
           .sort((a,b)=>b.net_holding-a.net_holding).slice(0,5);
 
@@ -1540,8 +1547,13 @@ async function loadWeekly(){{
         dailyHolders[sym] = dRows
           .sort((a,b)=>(b.holding_qty||0)-(a.holding_qty||0))
           .slice(0,5)
-          .map(r=>{{return {{broker:r.broker,name:r.broker_name||'',
-            net_holding:r.holding_qty||0,avg_rate:r.avg_rate||0}};}});
+          .map(r=>{{return {{
+            broker:r.broker,
+            buy_qty:r.buy_qty||0, buy_amt:r.buy_amt||0,
+            sale_qty:r.total_sale_qty||0,
+            bulk_qty:r.bulk_sale_qty||0, bulk_sale_amt:r.bulk_sale_amt||0,
+            net_holding:r.holding_qty||0, avg_rate:r.avg_rate||0
+          }};}});
       }}
     }}
 
@@ -1552,13 +1564,28 @@ async function loadWeekly(){{
         const pct=Math.max(2,vol/maxV*100);
         const hList = holders[sym]||[];
         const holderRows = hList.length
-          ? hList.map((h,j)=>`<tr>
-              <td style="color:var(--muted)">${{medals[j]||'#'+(j+1)}}</td>
-              <td><span class="brk">${{h.broker}}</span></td>
-              <td class="bname">${{h.name}}</td>
-              <td class="pos">${{fmt(h.net_holding)}}</td>
-              <td style="color:var(--amber)">Rs ${{fmtf(h.avg_rate)}}</td>
-            </tr>`).join('')
+          ? hList.map((h,j)=>{{
+              const buyRate  = h.buy_qty>0      ? Math.round(((h.buy_amt||0)/h.buy_qty)*100)/100          : 0;
+              const sellRate = h.bulk_qty>0     ? Math.round(((h.bulk_sale_amt||0)/h.bulk_qty)*100)/100   : 0;
+              const holdRate = h.net_holding>0  ? Math.round(((h.buy_amt-h.bulk_sale_amt)/h.net_holding)*100)/100 : 0;
+              const nhcls    = h.net_holding>=0 ? 'pos' : 'neg';
+              return `<tr>
+                <td style="color:var(--muted);padding:4px 8px">${{medals[j]||'#'+(j+1)}}</td>
+                <td style="padding:4px 8px"><span class="brk">${{h.broker}}</span></td>
+                <td style="padding:4px 8px">
+                  <div class="m pos" style="font-size:11px">${{fmt(h.buy_qty||0)}}</div>
+                  <div style="color:var(--amber);font-size:9px">Rs ${{fmtf(buyRate)}}</div>
+                </td>
+                <td style="padding:4px 8px">
+                  <div class="m neg" style="font-size:11px">${{fmt(h.sale_qty||0)}}</div>
+                  <div style="color:var(--amber);font-size:9px">Rs ${{fmtf(sellRate)}}</div>
+                </td>
+                <td style="padding:4px 8px">
+                  <div class="m ${{nhcls}}" style="font-size:11px">${{fmt(h.net_holding||0)}}</div>
+                  <div style="color:var(--amber);font-size:9px">Rs ${{fmtf(holdRate)}}</div>
+                </td>
+              </tr>`;
+            }}).join('')
           : '<tr><td colspan="5" class="empty" style="padding:8px">No data</td></tr>';
         return `<div class="vol-item">
           <div class="vol-item-hdr" onclick="toggleHolder(this)">
@@ -1568,13 +1595,16 @@ async function loadWeekly(){{
               <div class="wtrack"><div class="wfill" style="width:${{pct}}%"></div></div>
               <span class="m pos">${{fmt(vol)}}</span>
             </div>
-            <span style="font-size:11px;color:var(--muted);margin-left:8px">▼ Top holders</span>
+            <span style="font-size:11px;color:var(--muted);margin-left:8px">▼ Top 5 holders</span>
           </div>
           <div class="vol-holders">
             <table class="holder-table">
               <thead><tr>
-                <th>#</th><th>Broker</th><th>Name</th>
-                <th>Net Holding</th><th>Avg Rate</th>
+                <th>#</th>
+                <th>Broker</th>
+                <th>Buy Qty<br><span style="font-weight:400;color:var(--muted)">Avg Rate</span></th>
+                <th>Sell Qty<br><span style="font-weight:400;color:var(--muted)">Avg Rate</span></th>
+                <th>Net Holding<br><span style="font-weight:400;color:var(--muted)">Avg Rate</span></th>
               </tr></thead>
               <tbody>${{holderRows}}</tbody>
             </table>
