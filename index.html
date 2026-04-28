@@ -1489,9 +1489,7 @@ async function buildCommonStocks(sym, brokerNums, dfrom, dto){
     }
 
     // ── ONLY include symbols traded by ALL selected brokers ───────────────
-    const brokerSet = new Set(brokerNums.map(String));
     const commonSyms = Object.entries(symBrkMap).filter(([sym, brkData])=>{
-      // Every selected broker must have bought at least 1 share
       return brokerNums.every(b=> brkData[b] && (brkData[b].buy_qty||0)>0);
     });
 
@@ -1502,10 +1500,32 @@ async function buildCommonStocks(sym, brokerNums, dfrom, dto){
       return;
     }
 
-    // Build CS_DATA sorted by total buy qty desc
+    // ── Fetch total market volume for common symbols from daily_volume ────
+    const commonSymList = commonSyms.map(([s])=>s);
+    const totalVolMap={};
+    try{
+      let dvRows=[], dvOff=0;
+      while(true){
+        const {data:dv}=await sb.from('daily_volume')
+          .select('symbol,total_buy_qty')
+          .in('symbol',commonSymList)
+          .gte('date',dfrom).lte('date',dto)
+          .range(dvOff,dvOff+999);
+        if(!dv||!dv.length) break;
+        dv.forEach(r=>{
+          if(!totalVolMap[r.symbol]) totalVolMap[r.symbol]=0;
+          totalVolMap[r.symbol]+=(r.total_buy_qty||0);
+        });
+        if(dv.length<1000) break;
+        dvOff+=1000;
+      }
+    }catch(e){console.warn('daily_volume fetch failed, using broker sum:',e);}
+
+    // Build CS_DATA — totalBuy = market volume (from daily_volume) or broker sum fallback
     CS_DATA = commonSyms.map(([sym, brkData])=>{
-      const totalBuy = Object.values(brkData).reduce((s,b)=>s+b.buy_qty,0);
-      return { symbol:sym, totalBuy, brkData };
+      const brokerBuy = Object.values(brkData).reduce((s,b)=>s+b.buy_qty,0);
+      const totalBuy  = totalVolMap[sym] || brokerBuy;  // market total or fallback
+      return { symbol:sym, totalBuy, brokerBuy, brkData };
     }).sort((a,b)=>b.totalBuy-a.totalBuy);
     CS_DATA.forEach((r,i)=>r.rank=i+1);
 
@@ -1601,7 +1621,7 @@ function renderCsTable(data, brkMeta){
         <tr>
           <th rowspan="2" onclick="sortCs('rank')" style="padding:6px 8px;min-width:36px"># ↕</th>
           <th rowspan="2" onclick="sortCs('symbol')" style="padding:6px 8px;min-width:60px">Symbol ↕</th>
-          <th rowspan="2" onclick="sortCs('totalBuy')" style="padding:6px 8px;min-width:70px">Total Buy ↕</th>
+          <th rowspan="2" onclick="sortCs('totalBuy')" style="padding:6px 8px;min-width:80px">Market Vol ↕<div style="font-weight:400;font-size:9px;color:var(--muted)">Total buy all brokers</div></th>
           ${thBrk}
         </tr>
         <tr>${thSub}</tr>
