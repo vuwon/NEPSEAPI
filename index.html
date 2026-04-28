@@ -258,6 +258,48 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
   <!-- TAB 4: MARKET SUMMARY -->
   <div id="tab-mkt" style="display:none">
 
+    <!-- Gainers / Losers -->
+    <div id="gl-section" style="margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="tw">
+          <div class="th2" style="border-bottom:1px solid var(--border)">
+            <span class="ttitle" style="color:var(--green)">▲ Top 10 Gainers</span>
+            <span class="tcnt" id="gl-date-label">—</span>
+          </div>
+          <div class="tscroll"><table style="min-width:0">
+            <thead><tr>
+              <th style="width:28px">#</th>
+              <th>Symbol</th>
+              <th>LTP</th>
+              <th>Change %</th>
+              <th>Points</th>
+            </tr></thead>
+            <tbody id="gainers-tbody">
+              <tr><td colspan="5"><div class="empty"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+        <div class="tw">
+          <div class="th2" style="border-bottom:1px solid var(--border)">
+            <span class="ttitle" style="color:var(--red)">▼ Top 10 Losers</span>
+            <span class="tcnt" id="gl-date-label2">—</span>
+          </div>
+          <div class="tscroll"><table style="min-width:0">
+            <thead><tr>
+              <th style="width:28px">#</th>
+              <th>Symbol</th>
+              <th>LTP</th>
+              <th>Change %</th>
+              <th>Points</th>
+            </tr></thead>
+            <tbody id="losers-tbody">
+              <tr><td colspan="5"><div class="empty"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Spotlight cards for highest vol script today -->
     <div class="ms-section-title" id="ms-title">Loading today's market data…</div>
     <div id="spotlight-wrap">
@@ -438,12 +480,94 @@ function brkCell(broker,name,qty,cls,rate){
     +rateHtml+'</div>';
 }
 
+// ── GAINERS / LOSERS ─────────────────────────────────────────────────────────
+async function loadGainersLosers(){
+  try{
+    // Get last 2 distinct trading dates from daily_volume
+    let dateSet=new Set(), off=0;
+    while(dateSet.size<2){
+      const {data,error}=await sb.from('daily_volume')
+        .select('date').order('date',{ascending:false}).range(off,off+199);
+      if(error||!data||!data.length) break;
+      data.forEach(r=>dateSet.add(r.date));
+      off+=200;
+      if(data.length<200) break;
+    }
+    const dates=[...dateSet].sort().reverse();
+    if(dates.length<2){
+      document.getElementById('gainers-tbody').innerHTML=
+        '<tr><td colspan="5"><div class="empty">Need at least 2 trading days of LTP data.</div></td></tr>';
+      document.getElementById('losers-tbody').innerHTML=
+        '<tr><td colspan="5"><div class="empty">Need at least 2 trading days of LTP data.</div></td></tr>';
+      return;
+    }
+    const todayDate=dates[0], prevDate=dates[1];
+    const label=prevDate+' → '+todayDate;
+    document.getElementById('gl-date-label').textContent=label;
+    document.getElementById('gl-date-label2').textContent=label;
+
+    // Fetch LTP for both dates
+    const {data:todayData,error:e1}=await sb.from('daily_volume')
+      .select('symbol,ltp').eq('date',todayDate).gt('ltp',0);
+    const {data:prevData, error:e2}=await sb.from('daily_volume')
+      .select('symbol,ltp').eq('date',prevDate).gt('ltp',0);
+    if(e1||e2) throw e1||e2;
+
+    // Build prev LTP lookup
+    const prevMap={};
+    (prevData||[]).forEach(r=>prevMap[r.symbol]=r.ltp);
+
+    // Compute change for each symbol
+    const changes=[];
+    for(const r of (todayData||[])){
+      const prev=prevMap[r.symbol];
+      if(!prev||prev<=0) continue;
+      const pts=Math.round((r.ltp-prev)*100)/100;
+      const pct=Math.round(((r.ltp-prev)/prev)*10000)/100;
+      changes.push({symbol:r.symbol, ltp:r.ltp, prev, pts, pct});
+    }
+
+    // Sort for gainers and losers
+    const gainers=[...changes].sort((a,b)=>b.pct-a.pct).slice(0,10);
+    const losers =[...changes].sort((a,b)=>a.pct-b.pct).slice(0,10);
+
+    const medals=['🥇','🥈','🥉'];
+    function glRow(r,i,isGain){
+      const cls=isGain?'pos':'neg';
+      const arrow=isGain?'▲':'▼';
+      return `<tr style="cursor:pointer" onclick="document.getElementById('f-sym').value='${r.symbol}';applyFilters()">
+        <td class="m" style="color:var(--muted)">${medals[i]||i+1}</td>
+        <td class="sym">${r.symbol}</td>
+        <td class="m">Rs ${fmtf(r.ltp)}</td>
+        <td class="m ${cls}">${arrow} ${Math.abs(r.pct).toFixed(2)}%</td>
+        <td class="m ${cls}">${r.pts>=0?'+':''}${fmtf(r.pts)}</td>
+      </tr>`;
+    }
+
+    document.getElementById('gainers-tbody').innerHTML=
+      gainers.length ? gainers.map((r,i)=>glRow(r,i,true)).join('') :
+      '<tr><td colspan="5"><div class="empty">No gainers today.</div></td></tr>';
+
+    document.getElementById('losers-tbody').innerHTML=
+      losers.length ? losers.map((r,i)=>glRow(r,i,false)).join('') :
+      '<tr><td colspan="5"><div class="empty">No losers today.</div></td></tr>';
+
+  }catch(e){
+    console.error('Gainers/losers error:',e);
+    document.getElementById('gainers-tbody').innerHTML=
+      '<tr><td colspan="5"><div class="empty">Error: '+e.message+'</div></td></tr>';
+    document.getElementById('losers-tbody').innerHTML=
+      '<tr><td colspan="5"><div class="empty">Error: '+e.message+'</div></td></tr>';
+  }
+}
+
 // ── MARKET SUMMARY ─────────────────────────────────────────────────────────
 async function loadMarketSummary(){
   if(mktLoaded) return;
   TODAY_STR = getToday();
   document.getElementById('today-lbl').textContent = TODAY_STR;
   document.getElementById('gen-at').textContent    = new Date().toLocaleTimeString();
+  loadGainersLosers();  // load gainers/losers in parallel
 
   try{
     // ── Find the most recent date with actual data ─────────────────
