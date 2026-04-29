@@ -430,6 +430,29 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
       </table></div>
     </div>
 
+    <!-- Top brokers for selected symbol -->
+    <div class="tw" style="margin-top:14px">
+      <div class="th2">
+        <span class="ttitle">Top buyers of selected symbol — all brokers</span>
+        <span class="tcnt" id="tb-cnt">—</span>
+      </div>
+      <div class="tscroll"><table>
+        <thead><tr>
+          <th onclick="sortTb('rank')"># ↕</th>
+          <th onclick="sortTb('broker')">Broker ↕</th>
+          <th onclick="sortTb('buy_qty')">Buy Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortTb('sale_qty')">Sell Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortTb('ipo_qty')">IPO Sale ↕</th>
+          <th onclick="sortTb('bulk_qty')">Bulk Sale ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortTb('holding_qty')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortTb('market_pct')">Mkt Share ↕</th>
+        </tr></thead>
+        <tbody id="tb-tbody">
+          <tr><td colspan="8"><div class="empty">Select a symbol, set date range and click Compare.</div></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
     <!-- Common stocks table — per broker columns -->
     <div class="tw" style="margin-top:14px">
       <div class="th2">
@@ -1237,6 +1260,7 @@ init();
 let CMP_BROKERS = [];
 let cmpChart = null;
 let CS_DATA = [], csSortCol = 'total_buy_qty', csSortAsc = false;
+let TB_DATA = [], tbSortCol = 'buy_qty', tbSortAsc = false;
 
 function initCmp(){ renderCmpTags(); }
 
@@ -1433,7 +1457,133 @@ async function loadCmp(){
 
   renderCmpChart(results);
   renderCmpTable(results);
-  await buildCommonStocks(sym, brokerNums, dfrom, dto);
+  await Promise.all([
+    buildTopBrokers(sym, dfrom, dto),
+    buildCommonStocks(sym, brokerNums, dfrom, dto),
+  ]);
+}
+
+function sortTb(col){
+  if(tbSortCol===col) tbSortAsc=!tbSortAsc; else{tbSortCol=col;tbSortAsc=false;}
+  renderTbTable(TB_DATA);
+}
+
+async function buildTopBrokers(sym, dfrom, dto){
+  if(!sym){ 
+    document.getElementById('tb-cnt').textContent='—';
+    return; 
+  }
+  document.getElementById('tb-cnt').textContent='Loading…';
+  document.getElementById('tb-tbody').innerHTML=
+    '<tr><td colspan="8"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
+  try{
+    // Fetch all broker rows for this symbol in date range
+    let all=[], off=0, lim=1000;
+    while(true){
+      const {data,error}=await sb.from('holdings').select(
+        'broker,broker_name,buy_qty,buy_amt,total_sale_qty,ipo_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty'
+      ).eq('symbol',sym).gte('date',dfrom).lte('date',dto)
+       .range(off,off+lim-1);
+      if(error) throw error;
+      all.push(...(data||[]));
+      if(!data||data.length<lim) break;
+      off+=lim;
+    }
+    if(!all.length){
+      document.getElementById('tb-cnt').textContent='No data';
+      document.getElementById('tb-tbody').innerHTML=
+        '<tr><td colspan="8"><div class="empty">No data for '+sym+' in this date range.</div></td></tr>';
+      return;
+    }
+
+    // Aggregate per broker across all dates in range
+    const bmap={};
+    for(const r of all){
+      const b=r.broker;
+      if(!bmap[b]) bmap[b]={
+        broker:b, name:r.broker_name||'',
+        buy_qty:0,buy_amt:0,sale_qty:0,
+        ipo_qty:0,bulk_qty:0,bulk_amt:0,holding_qty:0
+      };
+      bmap[b].buy_qty    +=(r.buy_qty||0);
+      bmap[b].buy_amt    +=(r.buy_amt||0);
+      bmap[b].sale_qty   +=(r.total_sale_qty||0);
+      bmap[b].ipo_qty    +=(r.ipo_sale_qty||0);
+      bmap[b].bulk_qty   +=(r.bulk_sale_qty||0);
+      bmap[b].bulk_amt   +=(r.bulk_sale_amt||0);
+      bmap[b].holding_qty+=(r.holding_qty||0);
+    }
+
+    // Fetch total market volume for market share %
+    let marketVol=0;
+    try{
+      const {data:dv}=await sb.from('daily_volume')
+        .select('total_buy_qty').eq('symbol',sym)
+        .gte('date',dfrom).lte('date',dto);
+      if(dv) marketVol=dv.reduce((s,r)=>s+(r.total_buy_qty||0),0);
+    }catch(e){}
+
+    TB_DATA = Object.values(bmap).map((b,i)=>{
+      const buyRate  = b.buy_qty>0   ? Math.round((b.buy_amt/b.buy_qty)*100)/100        : 0;
+      const sellRate = b.bulk_qty>0  ? Math.round((b.bulk_amt/b.bulk_qty)*100)/100      : 0;
+      const holdRate = b.holding_qty>0 ? Math.round(((b.buy_amt-b.bulk_amt)/b.holding_qty)*100)/100 : 0;
+      const mktPct   = marketVol>0   ? Math.round((b.buy_qty/marketVol)*10000)/100      : 0;
+      return {
+        broker:b.broker, name:b.name,
+        buy_qty:b.buy_qty, avg_buy_rate:buyRate,
+        sale_qty:b.sale_qty,
+        ipo_qty:b.ipo_qty,
+        bulk_qty:b.bulk_qty, avg_sell_rate:sellRate,
+        holding_qty:b.holding_qty, avg_hold_rate:holdRate,
+        market_pct:mktPct, rank:0
+      };
+    }).sort((a,b)=>b.buy_qty-a.buy_qty);
+    TB_DATA.forEach((r,i)=>r.rank=i+1);
+
+    document.getElementById('tb-cnt').textContent=
+      TB_DATA.length+' brokers · '+sym+' · '+dfrom+' → '+dto+
+      (marketVol>0?' · Mkt Vol: '+fmt(marketVol):'');
+    renderTbTable(TB_DATA);
+
+  }catch(e){
+    console.error('Top brokers error:',e);
+    document.getElementById('tb-tbody').innerHTML=
+      '<tr><td colspan="8"><div class="empty">Error: '+e.message+'</div></td></tr>';
+  }
+}
+
+function renderTbTable(data){
+  const tb=document.getElementById('tb-tbody');
+  if(!data||!data.length){tb.innerHTML='<tr><td colspan="8"><div class="empty">No data.</div></td></tr>';return;}
+  const sorted=[...data].sort((a,b)=>{
+    let va=a[tbSortCol], vb=b[tbSortCol];
+    if(typeof va==='number') return tbSortAsc?va-vb:vb-va;
+    return tbSortAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
+  });
+  const medals=['🥇','🥈','🥉'];
+  function qr(qty,rate,cls){
+    return '<div class="brk-cell">'
+      +'<div class="m '+cls+'" style="font-size:12px">'+fmt(qty)+'</div>'
+      +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(rate)+'</div>'
+      +'</div>';
+  }
+  tb.innerHTML=sorted.map(r=>{
+    const rk=r.rank; const medal=medals[rk-1]||rk;
+    const nhcls=r.holding_qty>=0?'pos':'neg';
+    const isSelected=CMP_BROKERS.find(b=>b.broker===r.broker);
+    return '<tr style="'+(isSelected?'background:rgba(0,200,255,0.05);border-left:2px solid var(--cyan)':'')+'">'
+      +'<td class="m" style="color:var(--muted)">'+medal+'</td>'
+      +'<td><span class="brk" style="'+(isSelected?'border-color:var(--cyan)':'')+'">'
+        +r.broker+'</span>'
+        +(isSelected?'<div style="font-size:9px;color:var(--cyan)">selected</div>':'')+'</td>'
+      +'<td>'+qr(r.buy_qty,r.avg_buy_rate,'pos')+'</td>'
+      +'<td>'+qr(r.sale_qty,r.avg_sell_rate,'neg')+'</td>'
+      +'<td><span class="ipo">'+fmt(r.ipo_qty)+'</span></td>'
+      +'<td>'+qr(r.bulk_qty,r.avg_sell_rate,'')+'</td>'
+      +'<td>'+qr(r.holding_qty,r.avg_hold_rate,nhcls)+'</td>'
+      +'<td class="m" style="color:'+(r.market_pct>5?'var(--cyan)':r.market_pct>1?'var(--amber)':'var(--muted)')+'">'+r.market_pct.toFixed(2)+'%</td>'
+      +'</tr>';
+  }).join('');
 }
 
 function sortCs(col){
