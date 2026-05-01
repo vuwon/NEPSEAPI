@@ -1547,7 +1547,7 @@ async function buildTopBrokers(sym, dfrom, dto){
       if(dv) marketVol=dv.reduce((s,r)=>s+(r.total_buy_qty||0),0);
     }catch(e){}
 
-    TB_DATA = Object.values(bmap).map((b,i)=>{
+    const allBrkData = Object.values(bmap).map((b,i)=>{
       const buyRate  = b.buy_qty>0   ? Math.round((b.buy_amt/b.buy_qty)*100)/100        : 0;
       const sellRate = b.bulk_qty>0  ? Math.round((b.bulk_amt/b.bulk_qty)*100)/100      : 0;
       const holdRate = b.holding_qty>0 ? Math.round(((b.buy_amt-b.bulk_amt)/b.holding_qty)*100)/100 : 0;
@@ -1562,10 +1562,12 @@ async function buildTopBrokers(sym, dfrom, dto){
         market_pct:mktPct, rank:0
       };
     }).sort((a,b)=>b.buy_qty-a.buy_qty);
+    // Top 10 by buy qty
+    TB_DATA = allBrkData.slice(0,10);
     TB_DATA.forEach((r,i)=>r.rank=i+1);
 
     document.getElementById('tb-cnt').textContent=
-      TB_DATA.length+' brokers · '+sym+' · '+dfrom+' → '+dto+
+      'Top 10 of '+allBrkData.length+' brokers · '+sym+' · '+dfrom+' → '+dto+
       (marketVol>0?' · Mkt Vol: '+fmt(marketVol):'');
     renderTbTable(TB_DATA);
 
@@ -1600,7 +1602,9 @@ function renderTbTable(data){
       +'<td><span class="brk" style="'+(isSelected?'border-color:var(--cyan)':'')+'">'
         +r.broker+'</span>'
         +(isSelected?'<div style="font-size:9px;color:var(--cyan)">selected</div>':'')+'</td>'
-      +'<td style="cursor:pointer" title="Click to see who sold to this broker" onclick="openSellerDrilldown('+r.broker+',"'+r.name+'")">'
+      +'<td style="cursor:pointer" title="Click to see who sold to this broker" '
+        +'data-broker="'+r.broker+'" data-name="'+r.name.replace(/"/g,'&quot;')+'" '
++'onclick="handleBuyClick(this)">'
         +'<div class="brk-cell">'
         +'<div class="m pos" style="font-size:12px;text-decoration:underline dotted;color:var(--cyan)">'+fmt(r.buy_qty)+'</div>'
         +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(r.avg_buy_rate)+'</div>'
@@ -1619,6 +1623,12 @@ function sortSeller(col){
   if(sellerSortCol===col) sellerSortAsc=!sellerSortAsc;
   else{sellerSortCol=col; sellerSortAsc=false;}
   renderSellerTable(SELLER_DATA);
+}
+
+function handleBuyClick(td){
+  const broker = parseInt(td.dataset.broker);
+  const name   = td.dataset.name||'';
+  openSellerDrilldown(broker, name);
 }
 
 async function openSellerDrilldown(buyerBroker, buyerName){
@@ -1844,15 +1854,17 @@ async function buildCommonStocks(sym, brokerNums, dfrom, dto){
     }catch(e){console.warn('daily_volume fetch failed, using broker sum:',e);}
 
     // Build CS_DATA — totalBuy = market volume (from daily_volume) or broker sum fallback
-    CS_DATA = commonSyms.map(([sym, brkData])=>{
+    const allCsData = commonSyms.map(([sym, brkData])=>{
       const brokerBuy = Object.values(brkData).reduce((s,b)=>s+b.buy_qty,0);
-      const totalBuy  = totalVolMap[sym] || brokerBuy;  // market total or fallback
+      const totalBuy  = totalVolMap[sym] || brokerBuy;
       return { symbol:sym, totalBuy, brokerBuy, brkData };
     }).sort((a,b)=>b.totalBuy-a.totalBuy);
+    // Top 10 by market volume
+    CS_DATA = allCsData.slice(0,10);
     CS_DATA.forEach((r,i)=>r.rank=i+1);
 
     document.getElementById('cs-cnt').textContent=
-      CS_DATA.length+' common symbols · '+brokerNums.length+' brokers · '+dfrom+' → '+dto;
+      'Top 10 of '+allCsData.length+' common symbols · '+brokerNums.length+' brokers · '+dfrom+' → '+dto;
     renderCsTable(CS_DATA, CS_BROKERS_META);
 
   }catch(e){
