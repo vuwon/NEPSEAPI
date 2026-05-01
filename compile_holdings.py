@@ -353,6 +353,46 @@ def upsert_daily_volume(supabase, vol_df, h_df):
     print(f"      Volume: {len(rows):,} symbol-days upserted to daily_volume")
 
 
+def compute_broker_trades(df):
+    """
+    Compute buyer-seller pair aggregates from raw transactions.
+    Returns DataFrame with (Date, Stock Symbol, Buyer, Seller, qty, amount).
+    """
+    grp = ["Date", "Stock Symbol", "Buyer", "Seller"]
+    required = all(c in df.columns for c in ["Buyer", "Seller", "Quantity", "Amount (Rs)"])
+    if not required:
+        return pd.DataFrame()
+
+    trades = (df.groupby(grp)
+                .agg(qty   =("Quantity",    "sum"),
+                     amount=("Amount (Rs)", "sum"))
+                .reset_index())
+    trades["Buyer"]  = trades["Buyer"].astype(int)
+    trades["Seller"] = trades["Seller"].astype(int)
+    trades = trades[trades["qty"] > 0]
+    return trades
+
+
+def upsert_broker_trades(supabase, trades_df):
+    """Upsert broker-seller pairs to broker_trades table."""
+    if trades_df.empty:
+        return
+    CHUNK = 300
+    rows = [{
+        "date"  : str(r["Date"]),
+        "symbol": str(r["Stock Symbol"]),
+        "buyer" : int(r["Buyer"]),
+        "seller": int(r["Seller"]),
+        "qty"   : int(r["qty"]),
+        "amount": float(round(r["amount"], 2)),
+    } for _, r in trades_df.iterrows()]
+
+    for i in range(0, len(rows), CHUNK):
+        supabase.upsert("broker_trades", rows[i:i+CHUNK],
+                        on_conflict="date,symbol,buyer,seller")
+    print(f"      Trades: {len(rows):,} buyer-seller pairs upserted")
+
+
 def upsert_file_to_supabase(supabase: SupabaseClient, h: pd.DataFrame,
                              broker_names: pd.DataFrame, sec_names: pd.DataFrame,
                              file_label: str):
@@ -508,6 +548,9 @@ def main():
         # Compute volume BEFORE aggregation — captures ALL brokers including zero-holding
         vol = compute_daily_volume(df)
 
+        # Compute buyer-seller pairs from raw transactions
+        trades = compute_broker_trades(df)
+
         # Aggregate holdings
         agg = aggregate_one_file(df)
 
@@ -533,6 +576,15 @@ def main():
                 agg_copy["broker_name"] = agg_copy.get("broker_name", pd.Series([""]* len(agg_copy))).fillna("")
         agg_frames_copy.append(agg_copy)
         vol_frames.append(vol)
+        # Upsert broker trades immediately
+        try:
+            upsert_broker_trades(supabase, trades)
+        except Exception as e:
+            if "broker_trades" in str(e) or "PGRST205" in str(e) or "404" in str(e):
+                print(f"      ⚠️  broker_trades table not found — run add_broker_trades_table.sql first.")
+            else:
+                raise
+        del trades
 
         # Upsert this file's holdings data to Supabase right away
         syms = upsert_file_to_supabase(supabase, agg, broker_names, sec_names, fname)
@@ -1071,7 +1123,7 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
             <th onclick="sortSeller('rank')"># ↕</th>
             <th onclick="sortSeller('seller')">Seller Broker ↕</th>
             <th onclick="sortSeller('qty')">Qty Sold ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
-            <th onclick="sortSeller('day_pct')">% of Day ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">vs total traded</span></th>
+            <th onclick="sortSeller('buyer_pct')" id="seller-pct-hdr">Sold to Buyer %<br><span style="font-weight:400;font-size:10px;color:var(--muted)">of buyer total</span></th>
           </tr></thead>
           <tbody id="seller-tbody">
             <tr><td colspan="4"><div class="empty">Click a Buy Qty cell in the table above.</div></td></tr>
@@ -2279,20 +2331,27 @@ async function openSellerDrilldown(buyerBroker, buyerName){{
     const avgBuyRate = totalBuyerQty>0
       ? Math.round((buyerRows.reduce((s,r)=>s+(r.buy_amt||0),0)/totalBuyerQty)*100)/100 : 0;
 
-    // Step 2: Get all sellers of this symbol in same date range
-    let allSellers=[], off=0, lim=1000;
-    while(true){{
-      const {{data,error}}=await sb.from('holdings').select(
-        'broker,broker_name,total_sale_qty,bulk_sale_qty,bulk_sale_amt,ipo_sale_qty,date'
-      ).eq('symbol',sym).gte('date',dfrom).lte('date',dto)
-       .gt('total_sale_qty',0).range(off,off+lim-1);
-      if(error) throw error;
-      allSellers.push(...(data||[]));
-      if(!data||data.length<lim) break;
-      off+=lim;
+    // Step 2: Query broker_trades — exact qty sold by each seller TO this buyer
+    let btRows=[], off2=0, lim2=1000;
+    try{{
+      while(true){{
+        const {{data,error}}=await sb.from('broker_trades').select(
+          'seller,qty,amount,date'
+        ).eq('symbol',sym).eq('buyer',buyerBroker)
+         .gte('date',dfrom).lte('date',dto)
+         .range(off2,off2+lim2-1);
+        if(error) throw error;
+        btRows.push(...(data||[]));
+        if(!data||data.length<lim2) break;
+        off2+=lim2;
+      }}
+    }}catch(e){{
+      // broker_trades table may not exist yet — fall back to holdings
+      console.warn('broker_trades not available, using holdings fallback:', e.message);
+      btRows=[];
     }}
 
-    // Step 3: Get total market volume for % calculation
+    // Step 3: Total market volume for % calculation
     let totalMarketQty=0;
     try{{
       const {{data:dv}}=await sb.from('daily_volume')
@@ -2300,34 +2359,73 @@ async function openSellerDrilldown(buyerBroker, buyerName){{
         .gte('date',dfrom).lte('date',dto);
       if(dv) totalMarketQty=dv.reduce((s,r)=>s+(r.total_buy_qty||0),0);
     }}catch(e){{}}
-    if(!totalMarketQty) totalMarketQty=allSellers.reduce((s,r)=>s+(r.total_sale_qty||0),0);
 
-    // Aggregate sellers
-    const sellerMap={{}};
-    for(const r of allSellers){{
-      const b=r.broker;
-      if(!sellerMap[b]) sellerMap[b]={{broker:b,name:r.broker_name||'',qty:0,bulk_qty:0,bulk_amt:0,ipo_qty:0}};
-      sellerMap[b].qty      +=(r.total_sale_qty||0);
-      sellerMap[b].bulk_qty +=(r.bulk_sale_qty||0);
-      sellerMap[b].bulk_amt +=(r.bulk_sale_amt||0);
-      sellerMap[b].ipo_qty  +=(r.ipo_sale_qty||0);
+    if(btRows.length){{
+      // ── EXACT: from broker_trades table ──────────────────────────────────
+      // Fetch seller names from holdings
+      const sellerNums=[...new Set(btRows.map(r=>r.seller))];
+      const nameMap={{}};
+      try{{
+        const {{data:nh}}=await sb.from('holdings').select('broker,broker_name')
+          .eq('symbol',sym).in('broker',sellerNums).limit(200);
+        (nh||[]).forEach(r=>{{if(r.broker_name) nameMap[r.broker]=r.broker_name;}});
+      }}catch(e){{}}
+
+      // Aggregate by seller
+      const sellerMap={{}};
+      for(const r of btRows){{
+        const s=r.seller;
+        if(!sellerMap[s]) sellerMap[s]={{seller:s,qty:0,amount:0}};
+        sellerMap[s].qty    +=(r.qty||0);
+        sellerMap[s].amount +=(r.amount||0);
+      }}
+
+      SELLER_DATA=Object.values(sellerMap).map(s=>{{
+        const avgRate  = s.qty>0 ? Math.round((s.amount/s.qty)*100)/100 : 0;
+        const buyerPct = totalBuyerQty>0 ? Math.round((s.qty/totalBuyerQty)*10000)/100 : 0;
+        const mktPct   = totalMarketQty>0 ? Math.round((s.qty/totalMarketQty)*10000)/100 : 0;
+        return {{
+          seller:s.seller, name:nameMap[s.seller]||'',
+          qty:s.qty, avg_rate:avgRate,
+          buyer_pct:buyerPct, day_pct:mktPct, rank:0
+        }};
+      }}).sort((a,b)=>b.qty-a.qty);
+      SELLER_DATA.forEach((r,i)=>r.rank=i+1);
+
+    }}else{{
+      // ── FALLBACK: all sellers of this symbol (approximate) ────────────────
+      let allSellers=[], off3=0;
+      while(true){{
+        const {{data,error}}=await sb.from('holdings').select(
+          'broker,broker_name,total_sale_qty,bulk_sale_qty,bulk_sale_amt'
+        ).eq('symbol',sym).gte('date',dfrom).lte('date',dto)
+         .gt('total_sale_qty',0).range(off3,off3+999);
+        if(error) break;
+        allSellers.push(...(data||[]));
+        if(!data||data.length<1000) break;
+        off3+=1000;
+      }}
+      const sellerMap={{}};
+      for(const r of allSellers){{
+        const b=r.broker;
+        if(!sellerMap[b]) sellerMap[b]={{seller:b,name:r.broker_name||'',qty:0,bulk_qty:0,bulk_amt:0}};
+        sellerMap[b].qty      +=(r.total_sale_qty||0);
+        sellerMap[b].bulk_qty +=(r.bulk_sale_qty||0);
+        sellerMap[b].bulk_amt +=(r.bulk_sale_amt||0);
+      }}
+      SELLER_DATA=Object.values(sellerMap).map(s=>{{
+        const avgRate  = s.bulk_qty>0 ? Math.round((s.bulk_amt/s.bulk_qty)*100)/100 : 0;
+        const mktPct   = totalMarketQty>0 ? Math.round((s.qty/totalMarketQty)*10000)/100 : 0;
+        return {{seller:s.seller,name:s.name,qty:s.qty,avg_rate:avgRate,
+                 buyer_pct:null,day_pct:mktPct,rank:0}};
+      }}).sort((a,b)=>b.qty-a.qty);
+      SELLER_DATA.forEach((r,i)=>r.rank=i+1);
     }}
 
-    SELLER_DATA = Object.values(sellerMap).map((s,i)=>{{
-      const avgRate = s.bulk_qty>0 ? Math.round((s.bulk_amt/s.bulk_qty)*100)/100 : 0;
-      const dayPct  = totalMarketQty>0 ? Math.round((s.qty/totalMarketQty)*10000)/100 : 0;
-      return {{
-        seller:s.broker, name:s.name,
-        qty:s.qty, avg_rate:avgRate,
-        ipo_qty:s.ipo_qty, day_pct:dayPct, rank:0
-      }};
-    }}).sort((a,b)=>b.qty-a.qty);
-    SELLER_DATA.forEach((r,i)=>r.rank=i+1);
-
-    // Update title with buyer summary
     document.getElementById('seller-title').textContent=
       'Who sold '+sym+' to Broker '+buyerBroker+' ('+buyerName+') · '+dfrom+' → '+dto+
-      ' · Buyer total: '+fmt(totalBuyerQty)+' @ Rs '+fmtf(avgBuyRate);
+      ' · Buyer total: '+fmt(totalBuyerQty)+' @ Rs '+fmtf(avgBuyRate)+
+      (btRows.length?' (exact)':' (approximate — run compile to get exact data)');
 
     sellerSortCol='qty'; sellerSortAsc=false;
     renderSellerTable(SELLER_DATA);
@@ -2341,33 +2439,38 @@ async function openSellerDrilldown(buyerBroker, buyerName){{
 
 function renderSellerTable(data){{
   const tb=document.getElementById('seller-tbody');
-  if(!data||!data.length){{
-    tb.innerHTML='<tr><td colspan="4"><div class="empty">No sellers found.</div></td></tr>';
-    return;
-  }}
+  if(!data||!data.length){{tb.innerHTML='<tr><td colspan="4"><div class="empty">No sellers found.</div></td></tr>';return;}}
   const sorted=[...data].sort((a,b)=>{{
     let va=a[sellerSortCol],vb=b[sellerSortCol];
+    if(va===null||va===undefined) va=0;
+    if(vb===null||vb===undefined) vb=0;
     if(typeof va==='number') return sellerSortAsc?va-vb:vb-va;
     return sellerSortAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
   }});
   const medals=['🥇','🥈','🥉'];
-  const totalQty=data.reduce((s,r)=>s+r.qty,0);
+  const hasExact=sorted.some(r=>r.buyer_pct!==null&&r.buyer_pct!==undefined);
+  const hdrEl=document.getElementById('seller-pct-hdr');
+  if(hdrEl) hdrEl.innerHTML=hasExact
+    ? '% of Buyer Total ↕<br><span style="font-weight:400;font-size:9px;color:var(--muted)">exact from trades</span>'
+    : 'Mkt Share % ↕<br><span style="font-weight:400;font-size:9px;color:var(--muted)">approx</span>';
+  const maxPct=Math.max(...sorted.map(r=>(r.buyer_pct!=null?r.buyer_pct:r.day_pct)||0),1);
   tb.innerHTML=sorted.map(r=>{{
     const rk=r.rank;
-    const pctBar=Math.max(2,r.day_pct/Math.max(...data.map(x=>x.day_pct))*80);
+    const pct=(r.buyer_pct!=null?r.buyer_pct:r.day_pct)||0;
+    const pctBar=Math.max(2,pct/maxPct*80);
+    const pctColor=pct>30?'var(--cyan)':pct>10?'var(--amber)':'var(--muted)';
     return '<tr>'
       +'<td class="m" style="color:var(--muted)">'+( medals[rk-1]||rk)+'</td>'
       +'<td><span class="brk sell">'+r.seller+'</span>'
         +(r.name?'<div class="bname">'+r.name+'</div>':'')+'</td>'
       +'<td><div class="brk-cell">'
         +'<div class="m neg">'+fmt(r.qty)+'</div>'
-        +(r.ipo_qty>0?'<div style="font-size:9px;color:var(--purple)">IPO: '+fmt(r.ipo_qty)+'</div>':'')
         +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(r.avg_rate)+'</div>'
         +'</div></td>'
       +'<td><div style="display:flex;align-items:center;gap:6px">'
         +'<div style="flex:1;height:4px;background:var(--muted2);border-radius:2px;max-width:60px">'
         +'<div style="width:'+pctBar+'px;height:100%;background:var(--red);border-radius:2px"></div></div>'
-        +'<span class="m" style="color:'+(r.day_pct>10?'var(--red)':r.day_pct>3?'var(--amber)':'var(--muted)')+'">'+r.day_pct.toFixed(2)+'%</span>'
+        +'<span class="m" style="color:'+pctColor+'">'+pct.toFixed(2)+'%</span>'
         +'</div></td>'
       +'</tr>';
   }}).join('');
