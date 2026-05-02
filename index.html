@@ -234,7 +234,17 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
           <th onclick="csrt('total_buy_qty')">Total Buy ↕</th><th onclick="csrt('total_sale_qty')">Total Sale ↕</th>
           <th onclick="csrt('total_ipo_qty')">IPO Sale ↕</th><th onclick="csrt('total_bulk_qty')">Bulk Sale ↕</th>
           <th onclick="csrt('net_holding')">Net Holding ↕</th><th onclick="csrt('avg_rate')">Avg Rate ↕</th>
-        </tr></thead>
+        </tr>
+        <tr id="cumul-summary" style="display:none;background:var(--s2);font-weight:600;border-top:2px solid var(--border2)">
+          <td colspan="4" class="m" style="color:var(--muted);font-size:11px">∑ Filtered total</td>
+          <td class="m pos" id="cs-buy">—</td>
+          <td class="m neg" id="cs-sale">—</td>
+          <td id="cs-ipo" style="color:var(--purple)">—</td>
+          <td class="m" id="cs-bulk">—</td>
+          <td class="m" id="cs-hold">—</td>
+          <td class="m" style="color:var(--amber)" id="cs-rate">—</td>
+        </tr>
+        </thead>
         <tbody id="tbody-c"></tbody>
       </table></div>
       <div class="pag">
@@ -1215,7 +1225,33 @@ function renderC(){
   document.getElementById('pp-c').disabled=pg.c<=1;
   document.getElementById('pn-c').disabled=pg.c>=pages;
   const tb=document.getElementById('tbody-c');
-  if(!sl.length){tb.innerHTML='<tr><td colspan="10"><div class="empty">No data.</div></td></tr>';return;}
+  if(!sl.length){tb.innerHTML='<tr><td colspan="10"><div class="empty">No data.</div></td></tr>';
+    document.getElementById('cumul-summary').style.display='none'; return;}
+
+  // ── Compute totals across ALL filtered rows (not just current page) ───────
+  const sumBuy  = data.reduce((s,r)=>s+(r.total_buy_qty||0),0);
+  const sumSale = data.reduce((s,r)=>s+(r.total_sale_qty||0),0);
+  const sumIpo  = data.reduce((s,r)=>s+(r.total_ipo_qty||0),0);
+  const sumBulk = data.reduce((s,r)=>s+(r.total_bulk_qty||0),0);
+  const sumHold = data.reduce((s,r)=>s+(r.net_holding||0),0);
+  // Weighted avg rate = (sum buy_amt - sum bulk_amt) / sum net_holding
+  const sumBuyAmt  = data.reduce((s,r)=>s+(r.total_buy_amt||0),0);
+  const sumBulkAmt = data.reduce((s,r)=>s+(r.total_bulk_amt||0),0);
+  const avgRate = sumHold>0 ? Math.round(((sumBuyAmt-sumBulkAmt)/sumHold)*100)/100 : 0;
+
+  const summary=document.getElementById('cumul-summary');
+  summary.style.display='';
+  document.getElementById('cs-buy').textContent  = fmt(sumBuy);
+  document.getElementById('cs-sale').textContent = fmt(sumSale);
+  document.getElementById('cs-ipo').innerHTML    = '<span class="ipo">'+fmt(sumIpo)+'</span>';
+  document.getElementById('cs-bulk').textContent = fmt(sumBulk);
+  const nhcls=sumHold>=0?'pos':'neg';
+  document.getElementById('cs-hold').className  = 'm '+nhcls;
+  document.getElementById('cs-hold').textContent = fmt(sumHold);
+  document.getElementById('cs-rate').textContent = sumHold>0?'Rs '+fmtf(avgRate):'—';
+  // Label shows count
+  summary.querySelector('td').textContent = '∑ '+tot.toLocaleString()+' rows';
+
   const medals=['🥇','🥈','🥉'];
   tb.innerHTML=sl.map((r,i)=>{
     const rank=off+i+1,medal=medals[rank-1]||'#'+rank;
