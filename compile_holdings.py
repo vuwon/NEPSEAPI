@@ -188,7 +188,7 @@ def aggregate_one_file(df):
     h["holding_qty"] = h["buy_qty"] - h["bulk_sale_qty"]
     h["avg_rate"]    = ((h["buy_amt"] - h["bulk_sale_amt"]) / h["holding_qty"]).where(h["holding_qty"]>0, 0).round(2)
     h["broker"]      = h["broker"].astype(int)
-    h = h[h["holding_qty"] != 0].copy()
+    h = h[(h["buy_qty"] > 0) | (h["total_sale_qty"] > 0)].copy()  # keep zero-holders with buy/sell activity
     return h
 
 
@@ -416,7 +416,7 @@ def upsert_file_to_supabase(supabase: SupabaseClient, h: pd.DataFrame,
     h["Security Name"] = h["Security Name"].fillna("")
 
     # Only non-zero holdings
-    h = h[h["holding_qty"] != 0].copy()
+    h = h[(h["buy_qty"] > 0) | (h["total_sale_qty"] > 0)].copy()  # keep zero-holders with buy/sell activity
     if h.empty:
         print(f"    {file_label}: no non-zero holdings, skipping")
         return set()
