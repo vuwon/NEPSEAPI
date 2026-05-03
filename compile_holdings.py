@@ -60,17 +60,29 @@ class SupabaseClient:
         }
 
     def upsert(self, table: str, rows: list, on_conflict: str):
-        """Upsert rows into a table."""
-        headers = {**self.headers, "Prefer": f"resolution=merge-duplicates,return=minimal"}
-        r = httpx.post(
-            f"{self.url}/rest/v1/{table}",
-            headers={**headers, "Prefer": f"resolution=merge-duplicates,return=minimal"},
-            params={"on_conflict": on_conflict},
-            content=json.dumps(rows),
-            timeout=60,
-        )
-        if r.status_code not in (200, 201):
-            raise Exception(f"Upsert failed [{r.status_code}]: {r.text[:300]}")
+        """Upsert rows into a table with automatic retry on network errors."""
+        import time
+        headers = {**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"}
+        for attempt in range(5):
+            try:
+                r = httpx.post(
+                    f"{self.url}/rest/v1/{table}",
+                    headers=headers,
+                    params={"on_conflict": on_conflict},
+                    content=json.dumps(rows),
+                    timeout=60,
+                )
+                if r.status_code not in (200, 201):
+                    raise Exception(f"Upsert failed [{r.status_code}]: {r.text[:300]}")
+                return
+            except Exception as e:
+                if "status_code" not in str(type(e)) and attempt < 4:
+                    wait = 15 * (attempt + 1)
+                    print(f"      ⚠️  Network error (attempt {attempt+1}/5): {e}")
+                    print(f"         Retrying in {wait}s...")
+                    time.sleep(wait)
+                else:
+                    raise
 
     def select(self, table: str, columns: str, filters: dict, limit: int = 10000) -> list:
         """Select rows from a table with simple equality filters."""
