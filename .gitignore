@@ -34,3 +34,8 @@ run_local.bat
 supabase*
 *.key
 *.secret
+floorsheet.db 
+data_backup/ 
+data/ 
+*.db 
+*.sqlite 
