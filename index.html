@@ -197,6 +197,7 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
     <div class="tab" onclick="showTab('topb')">Top Brokers Chart</div>
     <div class="tab" onclick="showTab('mkt')">Market Summary</div>
     <div class="tab" onclick="showTab('cmp')">Broker Comparison</div>
+    <div class="tab" onclick="showTab('mds')">⚠ Manipulation Detection</div>
   </div>
 
   <!-- TAB 1: DAILY HOLDINGS -->
@@ -502,6 +503,89 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
       </div>
       <div class="tscroll" id="cs-table-wrap">
         <div class="empty">Add brokers, select date range and click Compare.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- TAB 6: MANIPULATION DETECTION -->
+  <div id="tab-mds" style="display:none">
+
+    <!-- Controls -->
+    <div class="tw" style="margin-bottom:14px">
+      <div class="th2">
+        <span class="ttitle">⚠ NEPSE EOD Manipulation Detection</span>
+        <span class="tcnt" id="mds-cnt">—</span>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;border-bottom:1px solid var(--border)">
+        <div class="fg"><label>Analysis Window</label>
+          <select id="mds-window">
+            <option value="5">Last 5 trading days (default)</option>
+            <option value="10">Last 10 trading days</option>
+            <option value="today">Today only</option>
+          </select></div>
+        <div class="fg"><label>Min Risk Score</label>
+          <select id="mds-minscore">
+            <option value="0">All scripts</option>
+            <option value="4">Watchlist (4+)</option>
+            <option value="7">Suspicious (7+)</option>
+            <option value="10">Highly Suspicious (10+)</option>
+          </select></div>
+        <div class="btns">
+          <button class="btn btn-p" onclick="loadMDS()">🔍 Analyse</button>
+        </div>
+      </div>
+      <!-- Legend -->
+      <div style="padding:10px 16px;display:flex;flex-wrap:wrap;gap:14px;font-size:12px">
+        <span style="color:var(--muted)">Risk level:</span>
+        <span><span style="background:#2d5a27;color:#7fff6e;border-radius:4px;padding:1px 6px">0–3 Normal</span></span>
+        <span><span style="background:#5a4a00;color:#ffd700;border-radius:4px;padding:1px 6px">4–6 Watchlist</span></span>
+        <span><span style="background:#5a2000;color:#ff8c42;border-radius:4px;padding:1px 6px">7–9 Suspicious</span></span>
+        <span><span style="background:#5a0000;color:#ff4444;border-radius:4px;padding:1px 6px">≥10 Highly Suspicious</span></span>
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px" id="mds-cards">
+    </div>
+
+    <!-- Main detection table -->
+    <div class="tw" style="margin-bottom:14px">
+      <div class="th2"><span class="ttitle">Detection Results — all scripts scored</span></div>
+      <div class="tscroll"><table>
+        <thead><tr>
+          <th onclick="sortMds('rank')"># ↕</th>
+          <th onclick="sortMds('symbol')">Symbol ↕</th>
+          <th onclick="sortMds('score')">Risk Score ↕</th>
+          <th>Risk Level</th>
+          <th onclick="sortMds('vol_spike')">Vol Spike ↕<br><span style="font-size:9px;font-weight:400;color:var(--muted)">ratio vs avg</span></th>
+          <th onclick="sortMds('price_chg')">Price Chg ↕<br><span style="font-size:9px;font-weight:400;color:var(--muted)">% change</span></th>
+          <th onclick="sortMds('rising_days')">Rising Days ↕<br><span style="font-size:9px;font-weight:400;color:var(--muted)">consecutive</span></th>
+          <th onclick="sortMds('vwap_dev')">VWAP Dev ↕<br><span style="font-size:9px;font-weight:400;color:var(--muted)">% deviation</span></th>
+          <th onclick="sortMds('vol_spike_flag')">Volatility<br><span style="font-size:9px;font-weight:400;color:var(--muted)">spike flag</span></th>
+          <th onclick="sortMds('circuit_days')">Circuit Days ↕<br><span style="font-size:9px;font-weight:400;color:var(--muted)">upper circuit</span></th>
+          <th onclick="sortMds('ltp')">LTP ↕</th>
+        </tr></thead>
+        <tbody id="mds-tbody">
+          <tr><td colspan="11"><div class="empty">Click Analyse to run detection.</div></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- Radar chart panel — shown when clicking a script -->
+    <div id="mds-radar-wrap" style="display:none;margin-bottom:14px">
+      <div class="tw">
+        <div class="th2">
+          <span class="ttitle" id="mds-radar-title">Indicator radar — select a script above</span>
+          <button class="btn btn-g" style="font-size:11px;padding:4px 10px"
+            onclick="document.getElementById('mds-radar-wrap').style.display='none'">✕ Close</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;align-items:start">
+          <div style="position:relative;height:300px">
+            <canvas id="mds-radar" role="img" aria-label="Radar chart showing manipulation indicator scores"></canvas>
+          </div>
+          <div id="mds-indicator-detail" style="font-size:12px;line-height:2"></div>
+        </div>
       </div>
     </div>
 
@@ -1284,7 +1368,7 @@ function renderChart(sym){
 }
 
 function showTab(name){
-  ['daily','cumul','topb','mkt','cmp'].forEach(t=>{
+  ['daily','cumul','topb','mkt','cmp','mds'].forEach(t=>{
     document.getElementById('tab-'+t).style.display=t===name?'':'none';
   });
   document.querySelectorAll('.tab').forEach((el,i)=>{
@@ -1322,6 +1406,290 @@ async function init(){
 }
 
 init();
+
+// ── MANIPULATION DETECTION SYSTEM ───────────────────────────────────────────
+let MDS_DATA = [], mdsSortCol = 'score', mdsSortAsc = false;
+let mdsChart = null;
+
+const MDS_THRESHOLDS = {
+  vol_spike   : { warn:2, alert:3 },
+  price_chg   : { warn:5, alert:7 },
+  rising_days : { warn:3, alert:4 },
+  vwap_dev    : { warn:4, alert:6 },
+  circuit_days: { warn:2, alert:3 },
+};
+
+function scoreMDS(d){
+  let score = 0;
+  const flags = {};
+  // Volume Spike: ratio today vs window avg
+  if(d.vol_spike >= 3)      { score+=3; flags.vol_spike='🔴'; }
+  else if(d.vol_spike >= 2) { score+=1; flags.vol_spike='🟡'; }
+  else flags.vol_spike='🟢';
+  // Price Change %
+  if(Math.abs(d.price_chg) >= 7)      { score+=2; flags.price_chg='🔴'; }
+  else if(Math.abs(d.price_chg) >= 5) { score+=1; flags.price_chg='🟡'; }
+  else flags.price_chg='🟢';
+  // Rising Days (consecutive up days)
+  if(d.rising_days >= 4)      { score+=2; flags.rising_days='🔴'; }
+  else if(d.rising_days >= 3) { score+=1; flags.rising_days='🟡'; }
+  else flags.rising_days='🟢';
+  // VWAP Deviation
+  if(Math.abs(d.vwap_dev) >= 6)      { score+=2; flags.vwap_dev='🔴'; }
+  else if(Math.abs(d.vwap_dev) >= 4) { score+=1; flags.vwap_dev='🟡'; }
+  else flags.vwap_dev='🟢';
+  // Volatility Spike (price range > 5% in window)
+  if(d.price_range_pct >= 10)     { score+=2; flags.vol_spike_flag='🔴'; }
+  else if(d.price_range_pct >= 5) { score+=1; flags.vol_spike_flag='🟡'; }
+  else flags.vol_spike_flag='🟢';
+  // Upper Circuit (consecutive days at +X%)
+  if(d.circuit_days >= 3)      { score+=3; flags.circuit_days='🔴'; }
+  else if(d.circuit_days >= 2) { score+=1; flags.circuit_days='🟡'; }
+  else flags.circuit_days='🟢';
+  return { score, flags };
+}
+
+function riskLabel(score){
+  if(score >= 10) return {label:'Highly Suspicious', color:'#ff4444', bg:'rgba(255,68,68,0.12)'};
+  if(score >= 7)  return {label:'Suspicious',        color:'#ff8c42', bg:'rgba(255,140,66,0.12)'};
+  if(score >= 4)  return {label:'Watchlist',         color:'#ffd700', bg:'rgba(255,215,0,0.10)'};
+  return               {label:'Normal',              color:'#7fff6e', bg:'rgba(127,255,110,0.08)'};
+}
+
+function sortMds(col){
+  if(mdsSortCol===col) mdsSortAsc=!mdsSortAsc;
+  else{mdsSortCol=col; mdsSortAsc=col==='symbol';}
+  renderMdsTable(MDS_DATA);
+}
+
+async function loadMDS(){
+  const win    = document.getElementById('mds-window').value;
+  const minSc  = parseInt(document.getElementById('mds-minscore').value)||0;
+  document.getElementById('mds-cnt').textContent='Loading…';
+  document.getElementById('mds-tbody').innerHTML=
+    '<tr><td colspan="11"><div class="loading"><div class="spinner"></div>Analysing market data…</div></td></tr>';
+  document.getElementById('mds-cards').innerHTML='';
+  document.getElementById('mds-radar-wrap').style.display='none';
+
+  try{
+    // ── Step 1: Get last N trading dates ─────────────────────────────────
+    let dateSet=new Set(), off=0;
+    const need = win==='today' ? 2 : (parseInt(win)||5)+1;
+    while(dateSet.size < need){
+      const {data,error}=await sb.from('daily_volume')
+        .select('date').order('date',{ascending:false}).range(off,off+299);
+      if(error||!data||!data.length) break;
+      data.forEach(r=>dateSet.add(r.date));
+      off+=300; if(data.length<300) break;
+    }
+    const dates=[...dateSet].sort().reverse();
+    const today=dates[0];
+    const prev=dates[1]||today;
+    const windowDates = win==='today' ? [today] : dates.slice(0, parseInt(win)||5);
+
+    // ── Step 2: Fetch daily_volume for all dates in window ────────────────
+    let dvAll=[], dvOff=0;
+    while(true){
+      const {data,error}=await sb.from('daily_volume')
+        .select('date,symbol,total_buy_qty,total_sel_qty,ltp,vwap')
+        .in('date', windowDates).range(dvOff,dvOff+999);
+      if(error) throw error;
+      dvAll.push(...(data||[]));
+      if(!data||data.length<1000) break;
+      dvOff+=1000;
+    }
+    if(!dvAll.length){
+      document.getElementById('mds-tbody').innerHTML=
+        '<tr><td colspan="11"><div class="empty">No daily_volume data. Run compile first.</div></td></tr>';
+      return;
+    }
+
+    // ── Step 3: Compute indicators per symbol ─────────────────────────────
+    const symMap={};
+    for(const r of dvAll){
+      const s=r.symbol;
+      if(!symMap[s]) symMap[s]={symbol:s, rows:[]};
+      symMap[s].rows.push(r);
+    }
+
+    MDS_DATA=[];
+    for(const [sym, sd] of Object.entries(symMap)){
+      const rows=sd.rows.sort((a,b)=>b.date.localeCompare(a.date));
+      const todayRow=rows[0];
+      if(!todayRow||todayRow.date!==today) continue; // must have today's data
+
+      const ltps   = rows.map(r=>r.ltp||0).filter(x=>x>0);
+      const vols   = rows.map(r=>r.total_buy_qty||0);
+      const ltp    = todayRow.ltp||0;
+      const vwap   = todayRow.vwap||0;
+      const prevLtp= rows[1]?.ltp||ltp;
+
+      // Volume spike ratio: today vs avg of rest
+      const restVols=vols.slice(1);
+      const avgVol=restVols.length ? restVols.reduce((a,b)=>a+b,0)/restVols.length : vols[0];
+      const vol_spike=avgVol>0 ? Math.round((vols[0]/avgVol)*100)/100 : 1;
+
+      // Price change % (today vs previous day)
+      const price_chg=prevLtp>0 ? Math.round(((ltp-prevLtp)/prevLtp)*10000)/100 : 0;
+
+      // Consecutive rising days
+      let rising_days=0;
+      for(let i=0;i<ltps.length-1;i++){
+        if(ltps[i]>ltps[i+1]) rising_days++;
+        else break;
+      }
+
+      // VWAP deviation: (LTP - VWAP) / VWAP * 100
+      const vwap_dev=vwap>0 ? Math.round(((ltp-vwap)/vwap)*10000)/100 : 0;
+
+      // Price range % in window (high-low / low)
+      const maxLtp=Math.max(...ltps), minLtp=Math.min(...ltps);
+      const price_range_pct=minLtp>0 ? Math.round(((maxLtp-minLtp)/minLtp)*10000)/100 : 0;
+
+      // Consecutive upper circuit days (price_chg >= 9.9% per day)
+      let circuit_days=0;
+      for(let i=0;i<ltps.length-1;i++){
+        const chg=ltps[i+1]>0?(ltps[i]-ltps[i+1])/ltps[i+1]*100:0;
+        if(chg>=9.9) circuit_days++;
+        else break;
+      }
+
+      const d={symbol:sym, ltp, vwap, vol_spike, price_chg, rising_days,
+               vwap_dev, price_range_pct, circuit_days, vol_today:vols[0], rank:0};
+      const {score,flags}=scoreMDS(d);
+      MDS_DATA.push({...d, score, flags});
+    }
+
+    // Sort by score desc, assign rank
+    MDS_DATA.sort((a,b)=>b.score-a.score||b.vol_spike-a.vol_spike);
+    MDS_DATA.forEach((r,i)=>r.rank=i+1);
+
+    // Filter by min score
+    const filtered=MDS_DATA.filter(r=>r.score>=minSc);
+
+    // Summary cards
+    const counts={normal:0,watchlist:0,suspicious:0,high:0};
+    MDS_DATA.forEach(r=>{
+      if(r.score>=10) counts.high++;
+      else if(r.score>=7) counts.suspicious++;
+      else if(r.score>=4) counts.watchlist++;
+      else counts.normal++;
+    });
+    document.getElementById('mds-cards').innerHTML=[
+      {label:'Highly Suspicious', count:counts.high,      color:'#ff4444', icon:'🚨'},
+      {label:'Suspicious',        count:counts.suspicious, color:'#ff8c42', icon:'⚠️'},
+      {label:'Watchlist',         count:counts.watchlist,  color:'#ffd700', icon:'👁'},
+      {label:'Normal',            count:counts.normal,     color:'#7fff6e', icon:'✅'},
+    ].map(c=>`<div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:20px">${c.icon}</div>
+      <div style="font-size:22px;font-weight:700;color:${c.color};font-family:var(--mono)">${c.count}</div>
+      <div style="font-size:11px;color:var(--muted)">${c.label}</div>
+    </div>`).join('');
+
+    document.getElementById('mds-cnt').textContent=
+      filtered.length+' scripts · window: '+windowDates[windowDates.length-1]+' → '+today;
+    renderMdsTable(filtered);
+
+  }catch(e){
+    console.error('MDS error:',e);
+    document.getElementById('mds-tbody').innerHTML=
+      '<tr><td colspan="11"><div class="empty">Error: '+e.message+'</div></td></tr>';
+  }
+}
+
+function renderMdsTable(data){
+  const sorted=[...data].sort((a,b)=>{
+    let va=a[mdsSortCol],vb=b[mdsSortCol];
+    if(typeof va==='number') return mdsSortAsc?va-vb:vb-va;
+    return mdsSortAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
+  });
+  const tb=document.getElementById('mds-tbody');
+  if(!sorted.length){tb.innerHTML='<tr><td colspan="11"><div class="empty">No scripts meet the filter criteria.</div></td></tr>';return;}
+  const medals=['🥇','🥈','🥉'];
+  tb.innerHTML=sorted.map(r=>{
+    const rl=riskLabel(r.score);
+    const scoreBadge=`<span style="background:${rl.bg};color:${rl.color};border:1px solid ${rl.color};border-radius:6px;padding:2px 8px;font-weight:700;font-family:var(--mono)">${r.score}</span>`;
+    const levelBadge=`<span style="color:${rl.color};font-size:11px">${rl.label}</span>`;
+    const pctColor=r.price_chg>=0?'var(--green)':'var(--red)';
+    return `<tr style="cursor:pointer" onclick="openMdsRadar('${r.symbol}')">
+      <td class="m" style="color:var(--muted)">${medals[r.rank-1]||r.rank}</td>
+      <td class="sym">${r.symbol}</td>
+      <td style="text-align:center">${scoreBadge}</td>
+      <td>${levelBadge}</td>
+      <td class="m" style="color:${r.vol_spike>=3?'var(--red)':r.vol_spike>=2?'var(--amber)':'var(--muted)'}">${r.flags.vol_spike} ${r.vol_spike.toFixed(2)}x</td>
+      <td class="m" style="color:${pctColor}">${r.price_chg>=0?'+':''}${r.price_chg.toFixed(2)}%</td>
+      <td class="m" style="color:${r.rising_days>=4?'var(--red)':r.rising_days>=3?'var(--amber)':'var(--muted)'}">${r.flags.rising_days} ${r.rising_days}</td>
+      <td class="m" style="color:${Math.abs(r.vwap_dev)>=6?'var(--red)':Math.abs(r.vwap_dev)>=4?'var(--amber)':'var(--muted)'}">${r.flags.vwap_dev} ${r.vwap_dev.toFixed(2)}%</td>
+      <td class="m" style="text-align:center">${r.flags.vol_spike_flag} ${r.price_range_pct.toFixed(1)}%</td>
+      <td class="m" style="color:${r.circuit_days>=3?'var(--red)':r.circuit_days>=2?'var(--amber)':'var(--muted)'}">${r.flags.circuit_days} ${r.circuit_days}</td>
+      <td class="m" style="color:var(--amber)">Rs ${fmtf(r.ltp)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openMdsRadar(sym){
+  const r=MDS_DATA.find(x=>x.symbol===sym);
+  if(!r) return;
+  document.getElementById('mds-radar-wrap').style.display='';
+  document.getElementById('mds-radar-title').textContent=sym+' — Indicator Radar (Score: '+r.score+'/14)';
+
+  // Radar chart — normalize each indicator to 0-100
+  const indicators=[
+    {label:'Vol Spike',    val:Math.min(r.vol_spike/4*100,100),     raw:r.vol_spike.toFixed(2)+'x',    threshold:'≥3x = high risk'},
+    {label:'Price Chg %',  val:Math.min(Math.abs(r.price_chg)/10*100,100), raw:r.price_chg.toFixed(2)+'%', threshold:'≥7% = high risk'},
+    {label:'Rising Days',  val:Math.min(r.rising_days/5*100,100),   raw:r.rising_days+' days',         threshold:'≥4 = high risk'},
+    {label:'VWAP Dev',     val:Math.min(Math.abs(r.vwap_dev)/10*100,100), raw:r.vwap_dev.toFixed(2)+'%', threshold:'≥6% = high risk'},
+    {label:'Volatility',   val:Math.min(r.price_range_pct/15*100,100), raw:r.price_range_pct.toFixed(1)+'%', threshold:'≥10% = high risk'},
+    {label:'Circuit Days', val:Math.min(r.circuit_days/4*100,100),  raw:r.circuit_days+' days',        threshold:'≥3 = high risk'},
+  ];
+
+  if(mdsChart){mdsChart.destroy(); mdsChart=null;}
+  const rl=riskLabel(r.score);
+  mdsChart=new Chart(document.getElementById('mds-radar'),{
+    type:'radar',
+    data:{
+      labels:indicators.map(x=>x.label),
+      datasets:[{
+        label:sym,
+        data:indicators.map(x=>x.val),
+        backgroundColor:rl.color+'33',
+        borderColor:rl.color,
+        borderWidth:2,
+        pointBackgroundColor:rl.color,
+        pointRadius:4,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{r:{
+        beginAtZero:true, max:100,
+        ticks:{display:false},
+        grid:{color:'rgba(128,128,128,0.2)'},
+        pointLabels:{color:'var(--text)',font:{size:11}},
+      }},
+    }
+  });
+
+  // Detail panel
+  document.getElementById('mds-indicator-detail').innerHTML=
+    `<div style="font-weight:600;margin-bottom:8px;color:${rl.color}">${rl.label} — Score: ${r.score}/14</div>`+
+    indicators.map(ind=>
+      `<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0">
+        <span style="color:var(--muted)">${ind.label}</span>
+        <span><strong style="color:var(--text)">${ind.raw}</strong>
+          <span style="font-size:10px;color:var(--muted);margin-left:6px">${ind.threshold}</span></span>
+      </div>`
+    ).join('')+
+    `<div style="margin-top:10px;font-size:11px;color:var(--muted)">
+      LTP: Rs ${fmtf(r.ltp)} · VWAP: Rs ${fmtf(r.vwap)} · Vol today: ${fmt(r.vol_today)}
+    </div>
+    <div style="margin-top:6px">
+      <button class="btn btn-g" style="font-size:11px" onclick="document.getElementById('f-sym').value='${r.symbol}';showTab('mkt')">
+        → View in Market Summary
+      </button>
+    </div>`;
+}
 
 // ── BROKER COMPARISON ───────────────────────────────────────────────────────
 let CMP_BROKERS = [];
