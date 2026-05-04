@@ -1,3 +1,20 @@
+Metadata-Version: 2.4
+Name: nepse
+Version: 0.6.1
+Summary: Unofficial API to interface with https://www.nepalstock.com
+Author: basic-bgnr
+Project-URL: Repository, https://github.com/basic-bgnr/NepseUnofficialApi.git
+Project-URL: Issues, https://github.com/basic-bgnr/NepseUnofficialApi/issues
+Classifier: Intended Audience :: Research
+Classifier: Operating System :: POSIX :: Linux
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: httpx[http2]==0.27.2
+Requires-Dist: pywasm==1.2.2
+Requires-Dist: flask==3.0.3
+Requires-Dist: tqdm==4.66.5
+Requires-Dist: beautifulsoup4>=4.9.0
+
 # NEPSE API Test
 
 Testing and exploring the NEPSE (Nepal Stock Exchange) unofficial API.

@@ -1,4 +1,5 @@
 httpx
 pandas
 openpyxl
+beautifulsoup4
 git+https://github.com/basic-bgnr/NepseUnofficialApi

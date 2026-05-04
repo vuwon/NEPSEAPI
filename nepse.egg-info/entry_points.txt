@@ -1,0 +1,3 @@
+[console_scripts]
+merolagani-scrape = merolagani.cli:main
+nepse-cli = nepse:main_cli

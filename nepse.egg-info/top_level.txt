@@ -1,0 +1,10 @@
+DATA
+INPUT
+OUTPUT
+data_backup
+merolagani
+nepse
+new
+tests
+venv
+yaml
