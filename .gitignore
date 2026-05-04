@@ -22,3 +22,15 @@ nepse/
 data_backup/*.xlsx
 *.xlsx
 supabase key.txt
+*.bat
+*.txt
+data_backup/
+data/
+test_*.py
+check_*.py
+generate_*.py
+compile_remaining.py
+run_local.bat
+supabase*
+*.key
+*.secret
