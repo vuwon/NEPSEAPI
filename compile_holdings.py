@@ -122,6 +122,11 @@ def get_supabase() -> SupabaseClient:
             "SUPABASE_URL and SUPABASE_KEY environment variables are required.\n"
             "Set them as GitHub Secrets or locally before running."
         )
+    if not url.startswith("http"):
+        raise ValueError(
+            f"SUPABASE_URL must start with https:// — got: {url!r}\n"
+            "Check your GitHub Secrets or environment variables."
+        )
     return SupabaseClient(url, key)
 
 
@@ -592,8 +597,9 @@ def main():
         try:
             upsert_broker_trades(supabase, trades)
         except Exception as e:
-            if "broker_trades" in str(e) or "PGRST205" in str(e) or "404" in str(e):
-                print(f"      ⚠️  broker_trades table not found — run add_broker_trades_table.sql first.")
+            err = str(e)
+            if any(x in err for x in ["broker_trades","PGRST205","404","protocol","missing"]):
+                print(f"      ⚠️  broker_trades skipped: {err[:80]}")
             else:
                 raise
         del trades
