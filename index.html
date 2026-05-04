@@ -433,6 +433,15 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
           <th onclick="sortCmp('bulk_qty')">Bulk Sale ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
           <th onclick="sortCmp('net_holding')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Holding Rate</span></th>
           <th onclick="sortCmp('ltp')">LTP ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Last traded price</span></th>
+        <tr id="cmp-summary" style="display:none;background:var(--s2);font-weight:600;border-top:2px solid var(--border2)">
+          <td class="m" style="color:var(--muted);font-size:11px" id="cmp-sum-label">∑ Total</td>
+          <td><div class="brk-cell"><div class="m pos" id="cmp-sum-buy">—</div><div style="color:var(--amber);font-size:10px" id="cmp-sum-buy-rate">—</div></div></td>
+          <td><div class="brk-cell"><div class="m neg" id="cmp-sum-sell">—</div><div style="color:var(--amber);font-size:10px" id="cmp-sum-sell-rate">—</div></div></td>
+          <td><span class="ipo" id="cmp-sum-ipo">—</span></td>
+          <td><div class="brk-cell"><div class="m" id="cmp-sum-bulk">—</div><div style="color:var(--amber);font-size:10px" id="cmp-sum-bulk-rate">—</div></div></td>
+          <td><div class="brk-cell"><div class="m" id="cmp-sum-hold">—</div><div style="color:var(--amber);font-size:10px" id="cmp-sum-hold-rate">—</div></div></td>
+          <td class="m" style="color:var(--amber)" id="cmp-sum-ltp">—</td>
+        </tr>
         </tr></thead>
         <tbody id="cmp-tbody">
           <tr><td colspan="6"><div class="empty">Select a symbol, add brokers, then click Compare.</div></td></tr>
@@ -1353,7 +1362,8 @@ function removeCmpBroker(brk){
 function clearCmpBrokers(){
   CMP_BROKERS=[];
   renderCmpTags();
-  document.getElementById('cmp-tbody').innerHTML='<tr><td colspan="10"><div class="empty">Add brokers and click Compare.</div></td></tr>';
+  document.getElementById('cmp-tbody').innerHTML='<tr><td colspan="7"><div class="empty">Add brokers and click Compare.</div></td></tr>';
+  document.getElementById('cmp-summary').style.display='none';
   document.getElementById('cmp-rate-cards').innerHTML='<div class="empty">Add brokers and click Compare.</div>';
   if(cmpChartQty){ cmpChartQty.destroy(); cmpChartQty=null; }
   document.getElementById('cmp-cnt').textContent='—';
@@ -2127,6 +2137,43 @@ function sortCmp(col){
 
 function renderCmpTable(results){
   CMP_DATA=[...results];
+  // ── Compute summary totals ─────────────────────────────────────────────
+  if(results.length){
+    const sumBuy  = results.reduce((s,r)=>s+(r.buy_qty||0),0);
+    const sumSell = results.reduce((s,r)=>s+(r.sell_qty||0),0);
+    const sumIpo  = results.reduce((s,r)=>s+(r.ipo_qty||0),0);
+    const sumBulk = results.reduce((s,r)=>s+(r.bulk_qty||0),0);
+    const sumHold = results.reduce((s,r)=>s+(r.net_holding||0),0);
+    // Weighted avg rates
+    const totBuyAmt  = results.reduce((s,r)=>s+(r.buy_qty||0)*(r.avg_buy_rate||0),0);
+    const totSellAmt = results.reduce((s,r)=>s+(r.sell_qty||0)*(r.avg_sell_rate||0),0);
+    const totBulkAmt = results.reduce((s,r)=>s+(r.bulk_qty||0)*(r.bulk_rate||0),0);
+    const avgBuyRate  = sumBuy>0  ? Math.round((totBuyAmt/sumBuy)*100)/100   : 0;
+    const avgSellRate = sumSell>0 ? Math.round((totSellAmt/sumSell)*100)/100 : 0;
+    const avgBulkRate = sumBulk>0 ? Math.round((totBulkAmt/sumBulk)*100)/100 : 0;
+    const holdRate    = sumHold>0
+      ? Math.round(((results.reduce((s,r)=>s+(r.buy_qty||0)*(r.avg_buy_rate||0),0)
+                   - results.reduce((s,r)=>s+(r.bulk_qty||0)*(r.bulk_rate||0),0))
+                   / sumHold)*100)/100 : 0;
+    // LTP same for all (script-level)
+    const ltp = results[0]?.ltp||0;
+    const nhcls = sumHold>=0?'pos':'neg';
+    document.getElementById('cmp-summary').style.display='';
+    document.getElementById('cmp-sum-label').textContent='∑ '+results.length+' brokers';
+    document.getElementById('cmp-sum-buy').textContent      = fmt(sumBuy);
+    document.getElementById('cmp-sum-buy-rate').textContent = avgBuyRate?'Rs '+fmtf(avgBuyRate):'—';
+    document.getElementById('cmp-sum-sell').textContent     = fmt(sumSell);
+    document.getElementById('cmp-sum-sell-rate').textContent= avgSellRate?'Rs '+fmtf(avgSellRate):'—';
+    document.getElementById('cmp-sum-ipo').textContent      = fmt(sumIpo);
+    document.getElementById('cmp-sum-bulk').textContent     = fmt(sumBulk);
+    document.getElementById('cmp-sum-bulk-rate').textContent= avgBulkRate?'Rs '+fmtf(avgBulkRate):'—';
+    document.getElementById('cmp-sum-hold').className       = 'm '+nhcls;
+    document.getElementById('cmp-sum-hold').textContent     = fmt(sumHold);
+    document.getElementById('cmp-sum-hold-rate').textContent= holdRate?'Rs '+fmtf(holdRate):'—';
+    document.getElementById('cmp-sum-ltp').textContent      = ltp?'Rs '+fmtf(ltp):'—';
+  } else {
+    document.getElementById('cmp-summary').style.display='none';
+  }
   const tb=document.getElementById('cmp-tbody');
   if(!results.length){tb.innerHTML='<tr><td colspan="6"><div class="empty">No data.</div></td></tr>';return;}
   results=[...results].sort((a,b)=>{
