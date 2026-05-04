@@ -19,3 +19,6 @@ run_local.bat
 generate_html.py
 yaml/
 nepse/
+data_backup/*.xlsx
+*.xlsx
+supabase key.txt
