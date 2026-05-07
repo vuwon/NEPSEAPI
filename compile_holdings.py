@@ -414,62 +414,109 @@ def upsert_broker_trades(supabase, trades_df):
 
 def compute_and_upsert_accumulation(supabase, date_str, all_holdings_df):
     """
-    Compute cumulative holdings per broker per symbol up to date_str
-    and compare vs previous date. Store rows where change >= 10%.
-    Called once per compilation run for the latest date processed.
+    Compute true cumulative holdings by fetching ALL historical data from Supabase.
+    Compares cumulative sum up to today vs cumulative sum up to prev day.
     """
     try:
-        # Get the two most recent dates from the dataframe
-        dates = sorted(all_holdings_df["Date"].astype(str).unique(), reverse=True)
+        df = all_holdings_df.copy()
+        df["Date"] = df["Date"].astype(str)
+
+        dates = sorted(df["Date"].unique(), reverse=True)
         if len(dates) < 2:
-            print("    Accumulation: need at least 2 dates, skipping")
+            print("    Accumulation: need at least 2 dates in current batch, skipping")
             return
 
         today_str = dates[0]
         prev_str  = dates[1]
+        print(f"    Computing accumulation: {prev_str} -> {today_str}")
 
-        print(f"    Computing accumulation: {prev_str} → {today_str}")
+        # ── Fetch ALL historical holdings from Supabase ──────────────────
+        # We need cumulative sum per broker+symbol across ALL dates
+        print("      Fetching historical holdings from Supabase...")
+        all_rows = []
+        offset = 0
+        limit  = 1000
+        while True:
+            try:
+                result = supabase.select(
+                    "holdings",
+                    columns="date,symbol,broker,broker_name,holding_qty,avg_rate",
+                    filters={},
+                    limit=limit
+                )
+                # Manual pagination via httpx
+                import httpx
+                hdrs = {**supabase.headers, "Range": f"{offset}-{offset+limit-1}"}
+                r = httpx.get(
+                    f"{supabase.url}/rest/v1/holdings",
+                    headers=hdrs,
+                    params={"select": "date,symbol,broker,broker_name,holding_qty,avg_rate",
+                            "order": "date.asc"},
+                    timeout=60,
+                )
+                batch = r.json() if r.status_code == 200 else []
+                if not batch: break
+                all_rows.extend(batch)
+                if len(batch) < limit: break
+                offset += limit
+            except Exception as e:
+                print(f"      Fetch error at offset {offset}: {e}")
+                break
 
-        # Cumulative sum per broker+symbol up to today
-        df = all_holdings_df.copy()
-        df["Date"] = df["Date"].astype(str)
-        df["holding_qty"] = pd.to_numeric(df.get("holding_qty", df.get("HoldingQty", 0)), errors="coerce").fillna(0)
+        if not all_rows:
+            print("      No historical data found, using current batch only")
+            hist_df = df
+        else:
+            hist_df = pd.DataFrame(all_rows)
+            hist_df["Date"] = hist_df["date"].astype(str)
+            hist_df["holding_qty"] = pd.to_numeric(hist_df["holding_qty"], errors="coerce").fillna(0)
+            hist_df["avg_rate"]    = pd.to_numeric(hist_df.get("avg_rate", 0), errors="coerce").fillna(0)
+            # Rename to match local df columns
+            hist_df = hist_df.rename(columns={"symbol":"Stock Symbol"})
+            print(f"      Loaded {len(hist_df):,} historical rows")
 
-        today_cum = (df[df["Date"] <= today_str]
-                     .groupby(["Stock Symbol", "broker"])
-                     .agg(cum_today=("holding_qty", "sum"),
+        grp = ["Stock Symbol", "broker"]
+
+        # Cumulative sum up to today
+        today_cum = (hist_df[hist_df["Date"] <= today_str]
+                     .groupby(grp)
+                     .agg(cum_today  =("holding_qty", "sum"),
                           broker_name=("broker_name", "first"),
-                          avg_rate=("avg_rate", "last"))
+                          avg_rate   =("avg_rate",    "last"))
                      .reset_index())
 
-        prev_cum = (df[df["Date"] <= prev_str]
-                    .groupby(["Stock Symbol", "broker"])
+        # Cumulative sum up to prev day
+        prev_cum = (hist_df[hist_df["Date"] <= prev_str]
+                    .groupby(grp)
                     .agg(cum_prev=("holding_qty", "sum"))
                     .reset_index())
 
-        merged = today_cum.merge(prev_cum, on=["Stock Symbol", "broker"], how="left")
+        merged = today_cum.merge(prev_cum, on=grp, how="left")
         merged["cum_prev"]   = merged["cum_prev"].fillna(0)
         merged["change_qty"] = merged["cum_today"] - merged["cum_prev"]
-        merged = merged[(merged["cum_today"] > 0) &
-                        (merged["cum_prev"]  > 0) &
+        merged = merged[(merged["cum_today"]  > 0) &
+                        (merged["cum_prev"]   > 0) &
                         (merged["change_qty"] > 0)]
+        if merged.empty:
+            print(f"      No qualifying rows for {today_str}")
+            return
+
         merged["change_pct"] = ((merged["change_qty"] / merged["cum_prev"]) * 100).round(2)
         merged = merged[merged["change_pct"] >= 10].copy()
-
         if merged.empty:
-            print(f"    Accumulation: no qualifying rows for {today_str}")
+            print(f"      No rows with >=10% change for {today_str}")
             return
 
         rows = [{
             "date"       : today_str,
             "symbol"     : str(r["Stock Symbol"]),
             "broker"     : int(r["broker"]),
-            "broker_name": str(r.get("broker_name", "")),
+            "broker_name": str(r.get("broker_name") or ""),
             "cum_today"  : int(r["cum_today"]),
             "cum_prev"   : int(r["cum_prev"]),
             "change_qty" : int(r["change_qty"]),
-            "change_pct" : float(round(r["change_pct"], 2)),
-            "avg_rate"   : float(round(r.get("avg_rate", 0) or 0, 2)),
+            "change_pct" : float(r["change_pct"]),
+            "avg_rate"   : float(round(r.get("avg_rate") or 0, 2)),
             "updated_at" : datetime.now().isoformat(),
         } for _, r in merged.iterrows()]
 
@@ -481,7 +528,7 @@ def compute_and_upsert_accumulation(supabase, date_str, all_holdings_df):
 
     except Exception as e:
         if "accumulation" in str(e) or "42P01" in str(e):
-            print(f"    Accumulation table not found — run create_accumulation_table.sql")
+            print(f"    Accumulation table not found -- run create_accumulation_table.sql")
         else:
             print(f"    Accumulation error: {e}")
 
