@@ -1040,6 +1040,16 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
       </div>
     </div>
 
+    <!-- Accumulation detector -->
+    <div class="cw" style="margin-bottom:14px">
+      <div class="ctitle">Brokers accumulating — holding up ≥10% vs previous day
+        <span id="accum-date-label" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
+      </div>
+      <div id="accum-wrap">
+        <div class="empty"><div class="spinner"></div>Loading…</div>
+      </div>
+    </div>
+
     <!-- Daily top 10 + top 5 holders -->
     <div class="cw" style="margin-bottom:14px">
       <div class="ctitle" id="daily-vol-title">Top 10 scripts by volume — today</div>
@@ -1396,6 +1406,134 @@ async function loadGainersLosers(){{
   }}
 }}
 
+// ── ACCUMULATION DETECTOR ───────────────────────────────────────────────────
+async function loadAccumulation(){{
+  try{{
+    // Get last 2 trading dates
+    let dateSet=new Set(), off=0;
+    while(dateSet.size<2){{
+      const {{data,error}}=await sb.from('holdings')
+        .select('date').order('date',{{ascending:false}}).range(off,off+499);
+      if(error||!data||!data.length) break;
+      data.forEach(r=>dateSet.add(r.date));
+      off+=500; if(data.length<500) break;
+    }}
+    const dates=[...dateSet].sort().reverse();
+    if(dates.length<2){{
+      document.getElementById('accum-wrap').innerHTML=
+        '<div class="empty">Need at least 2 trading days of data.</div>';
+      return;
+    }}
+    const today=dates[0], prev=dates[1];
+    document.getElementById('accum-date-label').textContent=
+      '('+prev+' → '+today+')';
+
+    // Fetch today's holdings
+    let todayRows=[], off2=0, lim=1000;
+    while(true){{
+      const {{data,error}}=await sb.from('holdings')
+        .select('symbol,broker,broker_name,holding_qty,avg_rate')
+        .eq('date',today).range(off2,off2+lim-1);
+      if(error) throw error;
+      todayRows.push(...(data||[]));
+      if(!data||data.length<lim) break;
+      off2+=lim;
+    }}
+
+    // Fetch previous day's holdings
+    let prevRows=[], off3=0;
+    while(true){{
+      const {{data,error}}=await sb.from('holdings')
+        .select('symbol,broker,holding_qty')
+        .eq('date',prev).range(off3,off3+lim-1);
+      if(error) throw error;
+      prevRows.push(...(data||[]));
+      if(!data||data.length<lim) break;
+      off3+=lim;
+    }}
+
+    // Build prev lookup: symbol+broker -> holding_qty
+    const prevMap={{}};
+    for(const r of prevRows){{
+      prevMap[r.symbol+'|'+r.broker]=r.holding_qty||0;
+    }}
+
+    // Find brokers whose holding increased >=10%
+    const accum=[];
+    for(const r of todayRows){{
+      const todayHold = r.holding_qty||0;
+      if(todayHold<=0) continue;
+      const prevHold  = prevMap[r.symbol+'|'+r.broker]||0;
+      if(prevHold<=0){{
+        // New holder today — count as 100% increase if holding > 0
+        if(todayHold>0){{
+          accum.push({{
+            symbol:r.symbol, broker:r.broker, name:r.broker_name||'',
+            today:todayHold, prev:0,
+            change:todayHold, pct:100,
+            avg_rate:r.avg_rate||0
+          }});
+        }}
+        continue;
+      }}
+      const pct=Math.round(((todayHold-prevHold)/prevHold)*10000)/100;
+      if(pct>=10){{
+        accum.push({{
+          symbol:r.symbol, broker:r.broker, name:r.broker_name||'',
+          today:todayHold, prev:prevHold,
+          change:todayHold-prevHold, pct,
+          avg_rate:r.avg_rate||0
+        }});
+      }}
+    }}
+
+    // Sort by pct desc
+    accum.sort((a,b)=>b.pct-a.pct);
+
+    if(!accum.length){{
+      document.getElementById('accum-wrap').innerHTML=
+        '<div class="empty">No brokers with ≥10% holding increase today.</div>';
+      return;
+    }}
+
+    const medals=['🥇','🥈','🥉'];
+    document.getElementById('accum-wrap').innerHTML=
+      '<div class="tscroll"><table>'
+      +'<thead><tr>'
+      +'<th>#</th><th>Symbol</th><th>Broker</th>'
+      +'<th>Today Holding<br><span style="font-size:10px;font-weight:400;color:var(--muted)">Avg Rate</span></th>'
+      +'<th>Prev Holding</th>'
+      +'<th>Change</th>'
+      +'<th>Change %</th>'
+      +'</tr></thead>'
+      +'<tbody>'
+      +accum.map((r,i)=>{{
+        const pctColor=r.pct>=50?'var(--cyan)':r.pct>=25?'var(--amber)':'var(--green)';
+        const isNew=r.prev===0;
+        return '<tr style="cursor:pointer" data-sym="'+r.symbol+'" onclick="accumClick(this)">'
+          +'<td class="m" style="color:var(--muted)">'+(medals[i]||i+1)+'</td>'
+          +'<td class="sym">'+r.symbol+'</td>'
+          +'<td><span class="brk">'+r.broker+'</span>'
+            +(r.name?'<div class="bname">'+r.name+'</div>':'')+'</td>'
+          +'<td><div class="m pos">'+fmt(r.today)+'</div>'
+            +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(r.avg_rate)+'</div></td>'
+          +'<td class="m" style="color:var(--muted)">'+(isNew?'<span style="color:var(--cyan);font-size:10px">New holder</span>':fmt(r.prev))+'</td>'
+          +'<td class="m pos">+'+fmt(r.change)+'</td>'
+          +'<td><span style="background:var(--s2);color:'+pctColor+';border:1px solid '+pctColor+';border-radius:6px;padding:2px 8px;font-weight:600;font-family:var(--mono)">'
+            +(isNew?'New':'+'+r.pct.toFixed(1)+'%')+'</span></td>'
+          +'</tr>';
+      }}).join('')
+      +'</tbody></table></div>'
+      +'<div style="font-size:11px;color:var(--muted);padding:8px 12px">'
+      +accum.length+' broker-script pairs with holding increase ≥10% · click any row to view in Daily Holdings</div>';
+
+  }}catch(e){{
+    console.error('Accumulation error:',e);
+    document.getElementById('accum-wrap').innerHTML=
+      '<div class="empty">Error: '+e.message+'</div>';
+  }}
+}}
+
 // ── MARKET SUMMARY ─────────────────────────────────────────────────────────
 async function loadMarketSummary(){{
   if(mktLoaded) return;
@@ -1403,6 +1541,7 @@ async function loadMarketSummary(){{
   document.getElementById('today-lbl').textContent = TODAY_STR;
   document.getElementById('gen-at').textContent    = new Date().toLocaleTimeString();
   loadGainersLosers();  // load gainers/losers in parallel
+  loadAccumulation();   // load accumulation detector in parallel
 
   try{{
     // ── Find the most recent date with actual data ─────────────────
@@ -1846,6 +1985,8 @@ async function loadWeekly(){{
     console.error(e);
   }}
 }}
+
+function accumClick(tr){{const sym=tr.dataset.sym;if(sym){{document.getElementById('f-sym').value=sym;applyFilters();}}}}
 
 function toggleHolder(hdr){{
   const panel=hdr.nextElementSibling;
