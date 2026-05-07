@@ -436,18 +436,18 @@ def compute_and_upsert_accumulation(supabase, date_str, all_holdings_df):
         df["holding_qty"] = pd.to_numeric(df.get("holding_qty", df.get("HoldingQty", 0)), errors="coerce").fillna(0)
 
         today_cum = (df[df["Date"] <= today_str]
-                     .groupby(["Stock Symbol", "Broker"])
+                     .groupby(["Stock Symbol", "broker"])
                      .agg(cum_today=("holding_qty", "sum"),
-                          broker_name=("BrokerName", "first"),
+                          broker_name=("broker_name", "first"),
                           avg_rate=("avg_rate", "last"))
                      .reset_index())
 
         prev_cum = (df[df["Date"] <= prev_str]
-                    .groupby(["Stock Symbol", "Broker"])
+                    .groupby(["Stock Symbol", "broker"])
                     .agg(cum_prev=("holding_qty", "sum"))
                     .reset_index())
 
-        merged = today_cum.merge(prev_cum, on=["Stock Symbol", "Broker"], how="left")
+        merged = today_cum.merge(prev_cum, on=["Stock Symbol", "broker"], how="left")
         merged["cum_prev"]   = merged["cum_prev"].fillna(0)
         merged["change_qty"] = merged["cum_today"] - merged["cum_prev"]
         merged = merged[(merged["cum_today"] > 0) &
@@ -463,7 +463,7 @@ def compute_and_upsert_accumulation(supabase, date_str, all_holdings_df):
         rows = [{
             "date"       : today_str,
             "symbol"     : str(r["Stock Symbol"]),
-            "broker"     : int(r["Broker"]),
+            "broker"     : int(r["broker"]),
             "broker_name": str(r.get("broker_name", "")),
             "cum_today"  : int(r["cum_today"]),
             "cum_prev"   : int(r["cum_prev"]),
