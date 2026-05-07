@@ -734,55 +734,34 @@ async function loadGainersLosers(){
 // ── ACCUMULATION DETECTOR ───────────────────────────────────────────────────
 async function loadAccumulation(){
   try{
-    // Get last 2 trading dates
-    let dateSet=new Set(), off=0;
-    while(dateSet.size<2){
-      const {data,error}=await sb.from('holdings')
-        .select('date').order('date',{ascending:false}).range(off,off+499);
-      if(error||!data||!data.length) break;
-      data.forEach(r=>dateSet.add(r.date));
-      off+=500; if(data.length<500) break;
-    }
-    const dates=[...dateSet].sort().reverse();
-    if(dates.length<2){
+    // Simply query the pre-computed accumulation table — instant response
+    const {data:dateRows}=await sb.from('accumulation')
+      .select('date').order('date',{ascending:false}).limit(1);
+    if(!dateRows||!dateRows.length){
       document.getElementById('accum-wrap').innerHTML=
-        '<div class="empty">Need at least 2 trading days of data.</div>';
+        '<div class="empty">No accumulation data yet. Run compile_holdings.py to populate.</div>';
       return;
     }
-    const today=dates[0], prev=dates[1];
-    document.getElementById('accum-date-label').textContent=
-      '(sum of all holdings · '+prev+' → '+today+')';
+    const latestDate=dateRows[0].date;
+    document.getElementById('accum-date-label').textContent='('+latestDate+')';
 
-    // Call server-side SQL function — computes cumulative sums in DB
-    const {data,error} = await sb.rpc('get_accumulation',{
-      p_today   : today,
-      p_prev    : prev,
-      p_min_pct : 10
-    });
-
-    if(error){
-      // Fallback message if function not yet created
-      if(error.message&&error.message.includes('get_accumulation'))
-        document.getElementById('accum-wrap').innerHTML=
-          '<div class="empty">Run create_accumulation_function.sql in Supabase SQL Editor first.</div>';
-      else throw error;
-      return;
-    }
+    const {data,error}=await sb.from('accumulation')
+      .select('*')
+      .eq('date',latestDate)
+      .order('change_pct',{ascending:false});
+    if(error) throw error;
 
     if(!data||!data.length){
       document.getElementById('accum-wrap').innerHTML=
-        '<div class="empty">No brokers with ≥10% cumulative holding increase today.</div>';
+        '<div class="empty">No brokers with ≥10% cumulative holding increase on '+latestDate+'.</div>';
       return;
     }
 
-    ACCUM_DATA = data.map((r,i)=>({...r,
-      cumToday : r.cum_today||0,
-      cumPrev  : r.cum_prev||0,
-      change   : r.change_qty||0,
-      pct      : parseFloat(r.change_pct)||0,
-      name     : r.broker_name||'',
-      avg_rate : parseFloat(r.avg_rate)||0,
-      rank     : i+1
+    ACCUM_DATA=data.map((r,i)=>({...r,
+      cumToday:r.cum_today||0, cumPrev:r.cum_prev||0,
+      change:r.change_qty||0, pct:parseFloat(r.change_pct)||0,
+      name:r.broker_name||'', avg_rate:parseFloat(r.avg_rate)||0,
+      rank:i+1
     }));
     accumSortCol='pct'; accumSortAsc=false;
     renderAccumTable();

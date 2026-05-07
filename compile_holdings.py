@@ -744,7 +744,8 @@ def main():
     if agg_frames_copy:
         try:
             all_h = pd.concat(agg_frames_copy, ignore_index=True)
-            compute_and_upsert_accumulation(supabase, TODAY, all_h)
+            today_date = str(all_h["Date"].max()) if "Date" in all_h.columns else datetime.now().strftime("%Y-%m-%d")
+            compute_and_upsert_accumulation(supabase, today_date, all_h)
             del all_h
         except Exception as e:
             print(f"  Accumulation error: {e}")
