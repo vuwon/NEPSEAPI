@@ -1409,7 +1409,7 @@ async function loadGainersLosers(){{
 // ── ACCUMULATION DETECTOR ───────────────────────────────────────────────────
 async function loadAccumulation(){{
   try{{
-    // ── Get last 2 trading dates ──────────────────────────────────────────
+    // Get last 2 trading dates
     let dateSet=new Set(), off=0;
     while(dateSet.size<2){{
       const {{data,error}}=await sb.from('holdings')
@@ -1426,60 +1426,66 @@ async function loadAccumulation(){{
     }}
     const today=dates[0], prev=dates[1];
     document.getElementById('accum-date-label').textContent=
-      '(daily net position · '+prev+' → '+today+')';
+      '(sum of all holdings · '+prev+' → '+today+')';
 
-    // ── Fetch cumulative table (all-time net holding per broker per symbol) ─
-    // ── Fetch today and yesterday holdings directly (avoid unreliable cumulative) ─
-    let todayRows=[], prevRows=[], off2=0, lim=1000;
+    // Fetch ALL holdings rows up to and including today for all brokers
+    // We need cumulative sum per broker per symbol
+    let allRows=[], off2=0, lim=1000;
     while(true){{
       const {{data,error}}=await sb.from('holdings')
-        .select('symbol,broker,broker_name,holding_qty,avg_rate')
-        .eq('date',today).range(off2,off2+lim-1);
+        .select('symbol,broker,broker_name,holding_qty,avg_rate,date')
+        .lte('date',today)
+        .range(off2,off2+lim-1);
       if(error) throw error;
-      todayRows.push(...(data||[]));
+      allRows.push(...(data||[]));
       if(!data||data.length<lim) break;
       off2+=lim;
     }}
-    let off3=0;
-    while(true){{
-      const {{data,error}}=await sb.from('holdings')
-        .select('symbol,broker,holding_qty')
-        .eq('date',prev).range(off3,off3+lim-1);
-      if(error) throw error;
-      prevRows.push(...(data||[]));
-      if(!data||data.length<lim) break;
-      off3+=lim;
-    }}
-    if(!todayRows.length){{
+    if(!allRows.length){{
       document.getElementById('accum-wrap').innerHTML=
-        '<div class="empty">No holdings data for '+today+'.</div>';
+        '<div class="empty">No holdings data found.</div>';
       return;
     }}
-    // Build lookups
-    const prevMap={{}};
-    for(const r of prevRows) prevMap[r.symbol+'|'+r.broker]=(r.holding_qty||0);
 
-    // Find brokers where today holding_qty increased ≥10% vs yesterday
+    // Aggregate: cumulative sum per broker+symbol up to today and up to prev
+    const cumToday={{}}; // key = symbol|broker -> sum of holding_qty up to today
+    const cumPrev={{}};  // key = symbol|broker -> sum of holding_qty up to prev
+    const meta={{}};     // key = symbol|broker -> {{name, avg_rate}}
+
+    for(const r of allRows){{
+      const key=r.symbol+'|'+r.broker;
+      if(!cumToday[key]) cumToday[key]=0;
+      cumToday[key]+=(r.holding_qty||0);
+      if(r.date<=prev){{
+        if(!cumPrev[key]) cumPrev[key]=0;
+        cumPrev[key]+=(r.holding_qty||0);
+      }}
+      if(!meta[key]) meta[key]={{name:r.broker_name||'', avg_rate:r.avg_rate||0, symbol:r.symbol, broker:r.broker}};
+      else if(r.date===today) meta[key].avg_rate=r.avg_rate||0; // use today's rate
+    }}
+
+    // Find broker-symbol pairs where cumulative increased ≥10%
     const accum=[];
-    for(const r of todayRows){{
-      const cumToday = r.holding_qty||0;
-      const cumPrev  = prevMap[r.symbol+'|'+r.broker]||0;
-      if(cumToday<=0) continue;   // only positive holdings
-      if(cumPrev<=0)  continue;   // must have held yesterday too
-      const change = cumToday - cumPrev;
-      if(change<=0)   continue;   // only increases
-      if(cumPrev===0) continue;   // avoid division by zero
-      const pct = Math.round((change/cumPrev)*10000)/100;
-      if(!isFinite(pct)||isNaN(pct)) continue;  // skip invalid
-      if(pct<10)      continue;   // only ≥10%
-
+    for(const key of Object.keys(cumToday)){{
+      const cToday = cumToday[key]||0;
+      const cPrev  = cumPrev[key]||0;
+      if(cToday<=0)  continue;  // only positive cumulative today
+      if(cPrev<=0)   continue;  // must have had holdings before today
+      const change = cToday - cPrev;
+      if(change<=0)  continue;  // only increases
+      const pct = Math.round((change/cPrev)*10000)/100;
+      if(!isFinite(pct)||isNaN(pct)||pct<10) continue;
+      const m=meta[key]||{{}};
       accum.push({{
-        symbol:r.symbol||'', broker:r.broker||0, name:r.broker_name||'',
-        cumToday:cumToday, cumPrev:cumPrev, change:change, pct:pct, avg_rate:r.avg_rate||0, rank:0
+        symbol:m.symbol||key.split('|')[0],
+        broker:m.broker||parseInt(key.split('|')[1]),
+        name:m.name||'',
+        cumToday:cToday, cumPrev:cPrev,
+        change:change, pct:pct,
+        avg_rate:m.avg_rate||0, rank:0
       }});
     }}
 
-    // Sort by pct desc, assign rank
     accum.sort((a,b)=>b.pct-a.pct);
     accum.forEach((r,i)=>r.rank=i+1);
 
