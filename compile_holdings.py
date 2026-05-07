@@ -1,3 +1,5 @@
+import sys
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 """
 compile_holdings.py — NEPSE Holdings Compiler (Supabase Edition)
 
@@ -410,6 +412,80 @@ def upsert_broker_trades(supabase, trades_df):
     print(f"      Trades: {len(rows):,} buyer-seller pairs upserted")
 
 
+def compute_and_upsert_accumulation(supabase, date_str, all_holdings_df):
+    """
+    Compute cumulative holdings per broker per symbol up to date_str
+    and compare vs previous date. Store rows where change >= 10%.
+    Called once per compilation run for the latest date processed.
+    """
+    try:
+        # Get the two most recent dates from the dataframe
+        dates = sorted(all_holdings_df["Date"].astype(str).unique(), reverse=True)
+        if len(dates) < 2:
+            print("    Accumulation: need at least 2 dates, skipping")
+            return
+
+        today_str = dates[0]
+        prev_str  = dates[1]
+
+        print(f"    Computing accumulation: {prev_str} → {today_str}")
+
+        # Cumulative sum per broker+symbol up to today
+        df = all_holdings_df.copy()
+        df["Date"] = df["Date"].astype(str)
+        df["holding_qty"] = pd.to_numeric(df.get("holding_qty", df.get("HoldingQty", 0)), errors="coerce").fillna(0)
+
+        today_cum = (df[df["Date"] <= today_str]
+                     .groupby(["Stock Symbol", "Broker"])
+                     .agg(cum_today=("holding_qty", "sum"),
+                          broker_name=("BrokerName", "first"),
+                          avg_rate=("avg_rate", "last"))
+                     .reset_index())
+
+        prev_cum = (df[df["Date"] <= prev_str]
+                    .groupby(["Stock Symbol", "Broker"])
+                    .agg(cum_prev=("holding_qty", "sum"))
+                    .reset_index())
+
+        merged = today_cum.merge(prev_cum, on=["Stock Symbol", "Broker"], how="left")
+        merged["cum_prev"]   = merged["cum_prev"].fillna(0)
+        merged["change_qty"] = merged["cum_today"] - merged["cum_prev"]
+        merged = merged[(merged["cum_today"] > 0) &
+                        (merged["cum_prev"]  > 0) &
+                        (merged["change_qty"] > 0)]
+        merged["change_pct"] = ((merged["change_qty"] / merged["cum_prev"]) * 100).round(2)
+        merged = merged[merged["change_pct"] >= 10].copy()
+
+        if merged.empty:
+            print(f"    Accumulation: no qualifying rows for {today_str}")
+            return
+
+        rows = [{
+            "date"       : today_str,
+            "symbol"     : str(r["Stock Symbol"]),
+            "broker"     : int(r["Broker"]),
+            "broker_name": str(r.get("broker_name", "")),
+            "cum_today"  : int(r["cum_today"]),
+            "cum_prev"   : int(r["cum_prev"]),
+            "change_qty" : int(r["change_qty"]),
+            "change_pct" : float(round(r["change_pct"], 2)),
+            "avg_rate"   : float(round(r.get("avg_rate", 0) or 0, 2)),
+            "updated_at" : datetime.now().isoformat(),
+        } for _, r in merged.iterrows()]
+
+        CHUNK = 500
+        for i in range(0, len(rows), CHUNK):
+            supabase.upsert("accumulation", rows[i:i+CHUNK],
+                            on_conflict="date,symbol,broker")
+        print(f"    Accumulation: {len(rows)} rows upserted for {today_str}")
+
+    except Exception as e:
+        if "accumulation" in str(e) or "42P01" in str(e):
+            print(f"    Accumulation table not found — run create_accumulation_table.sql")
+        else:
+            print(f"    Accumulation error: {e}")
+
+
 def upsert_file_to_supabase(supabase: SupabaseClient, h: pd.DataFrame,
                              broker_names: pd.DataFrame, sec_names: pd.DataFrame,
                              file_label: str):
@@ -663,6 +739,15 @@ def main():
     print(f"\nGenerating {OUTPUT_HTML}...")
     write_html()
     print(f"  Size: {os.path.getsize(OUTPUT_HTML)/1024:.1f} KB")
+
+    # Compute and store accumulation data for today
+    if agg_frames_copy:
+        try:
+            all_h = pd.concat(agg_frames_copy, ignore_index=True)
+            compute_and_upsert_accumulation(supabase, TODAY, all_h)
+            del all_h
+        except Exception as e:
+            print(f"  Accumulation error: {e}")
 
     print(f"\n✅ All done in {time.time()-t0:.1f}s")
 
@@ -1409,55 +1494,34 @@ async function loadGainersLosers(){{
 // ── ACCUMULATION DETECTOR ───────────────────────────────────────────────────
 async function loadAccumulation(){{
   try{{
-    // Get last 2 trading dates
-    let dateSet=new Set(), off=0;
-    while(dateSet.size<2){{
-      const {{data,error}}=await sb.from('holdings')
-        .select('date').order('date',{{ascending:false}}).range(off,off+499);
-      if(error||!data||!data.length) break;
-      data.forEach(r=>dateSet.add(r.date));
-      off+=500; if(data.length<500) break;
-    }}
-    const dates=[...dateSet].sort().reverse();
-    if(dates.length<2){{
+    // Simply query the pre-computed accumulation table — instant response
+    const {{data:dateRows}}=await sb.from('accumulation')
+      .select('date').order('date',{{ascending:false}}).limit(1);
+    if(!dateRows||!dateRows.length){{
       document.getElementById('accum-wrap').innerHTML=
-        '<div class="empty">Need at least 2 trading days of data.</div>';
+        '<div class="empty">No accumulation data yet. Run compile_holdings.py to populate.</div>';
       return;
     }}
-    const today=dates[0], prev=dates[1];
-    document.getElementById('accum-date-label').textContent=
-      '(sum of all holdings · '+prev+' → '+today+')';
+    const latestDate=dateRows[0].date;
+    document.getElementById('accum-date-label').textContent='('+latestDate+')';
 
-    // Call server-side SQL function — computes cumulative sums in DB
-    const {{data,error}} = await sb.rpc('get_accumulation',{{
-      p_today   : today,
-      p_prev    : prev,
-      p_min_pct : 10
-    }});
-
-    if(error){{
-      // Fallback message if function not yet created
-      if(error.message&&error.message.includes('get_accumulation'))
-        document.getElementById('accum-wrap').innerHTML=
-          '<div class="empty">Run create_accumulation_function.sql in Supabase SQL Editor first.</div>';
-      else throw error;
-      return;
-    }}
+    const {{data,error}}=await sb.from('accumulation')
+      .select('*')
+      .eq('date',latestDate)
+      .order('change_pct',{{ascending:false}});
+    if(error) throw error;
 
     if(!data||!data.length){{
       document.getElementById('accum-wrap').innerHTML=
-        '<div class="empty">No brokers with ≥10% cumulative holding increase today.</div>';
+        '<div class="empty">No brokers with ≥10% cumulative holding increase on '+latestDate+'.</div>';
       return;
     }}
 
-    ACCUM_DATA = data.map((r,i)=>({{...r,
-      cumToday : r.cum_today||0,
-      cumPrev  : r.cum_prev||0,
-      change   : r.change_qty||0,
-      pct      : parseFloat(r.change_pct)||0,
-      name     : r.broker_name||'',
-      avg_rate : parseFloat(r.avg_rate)||0,
-      rank     : i+1
+    ACCUM_DATA=data.map((r,i)=>({{...r,
+      cumToday:r.cum_today||0, cumPrev:r.cum_prev||0,
+      change:r.change_qty||0, pct:parseFloat(r.change_pct)||0,
+      name:r.broker_name||'', avg_rate:parseFloat(r.avg_rate)||0,
+      rank:i+1
     }}));
     accumSortCol='pct'; accumSortAsc=false;
     renderAccumTable();
