@@ -793,10 +793,14 @@ async function loadAccumulation(){
       if(cumPrev<=0)  continue;   // must have held yesterday too
       const change = cumToday - cumPrev;
       if(change<=0)   continue;   // only increases
+      if(cumPrev===0) continue;   // avoid division by zero
       const pct = Math.round((change/cumPrev)*10000)/100;
+      if(!isFinite(pct)||isNaN(pct)) continue;  // skip invalid
       if(pct<10)      continue;   // only ≥10%
 
       accum.push({
+        symbol:r.symbol||'', broker:r.broker||0, name:r.broker_name||'',
+        cumToday:cumToday, cumPrev:cumPrev, change:change, pct:pct, avg_rate:r.avg_rate||0, rank:0
       });
     }
 
@@ -1303,7 +1307,7 @@ function renderAccumTable(){
     +thSort('pct','Change %')
     +'</tr></thead><tbody>'
     +sorted.map((r,i)=>{
-      const pctColor=r.pct>=50?'var(--cyan)':r.pct>=25?'var(--amber)':'var(--green)';
+      const pct2=(r.pct||0); const pctColor=pct2>=50?'var(--cyan)':pct2>=25?'var(--amber)':'var(--green)';
       return '<tr data-sym="'+r.symbol+'" onclick="accumClick(this)" style="cursor:pointer">'
         +'<td class="m" style="color:var(--muted)">'+(medals[r.rank-1]||r.rank)+'</td>'
         +'<td class="sym">'+r.symbol+'</td>'
