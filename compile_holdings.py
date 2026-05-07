@@ -1426,88 +1426,58 @@ async function loadAccumulation(){{
     }}
     const today=dates[0], prev=dates[1];
     document.getElementById('accum-date-label').textContent=
-      '(cumulative holdings · '+prev+' → '+today+')';
+      '(daily net position · '+prev+' → '+today+')';
 
     // ── Fetch cumulative table (all-time net holding per broker per symbol) ─
-    let cumRows=[], off2=0, lim=1000;
-    while(true){{
-      const {{data,error}}=await sb.from('cumulative')
-        .select('symbol,broker,broker_name,net_holding,avg_rate')
-        .gt('net_holding',0)
-        .range(off2,off2+lim-1);
-      if(error) throw error;
-      cumRows.push(...(data||[]));
-      if(!data||data.length<lim) break;
-      off2+=lim;
-    }}
-    if(!cumRows.length){{
-      document.getElementById('accum-wrap').innerHTML=
-        '<div class="empty">No cumulative data found.</div>';
-      return;
-    }}
-
-    // ── Fetch today's holdings (single day change) ─────────────────────────
-    let todayRows=[], off3=0;
+    // ── Fetch today and yesterday holdings directly (avoid unreliable cumulative) ─
+    let todayRows=[], prevRows=[], off2=0, lim=1000;
     while(true){{
       const {{data,error}}=await sb.from('holdings')
-        .select('symbol,broker,holding_qty')
-        .eq('date',today).range(off3,off3+lim-1);
+        .select('symbol,broker,broker_name,holding_qty,avg_rate')
+        .eq('date',today).range(off2,off2+lim-1);
       if(error) throw error;
       todayRows.push(...(data||[]));
       if(!data||data.length<lim) break;
-      off3+=lim;
+      off2+=lim;
     }}
-
-    // ── Fetch previous day's holdings ──────────────────────────────────────
-    let prevRows=[], off4=0;
+    let off3=0;
     while(true){{
       const {{data,error}}=await sb.from('holdings')
         .select('symbol,broker,holding_qty')
-        .eq('date',prev).range(off4,off4+lim-1);
+        .eq('date',prev).range(off3,off3+lim-1);
       if(error) throw error;
       prevRows.push(...(data||[]));
       if(!data||data.length<lim) break;
-      off4+=lim;
+      off3+=lim;
     }}
-
-    // ── Build lookups ─────────────────────────────────────────────────────
-    // today's single-day holding change per broker-symbol
-    const todayMap={{}};
-    for(const r of todayRows)
-      todayMap[r.symbol+'|'+r.broker]=(r.holding_qty||0);
-
-    // prev day's single-day holding per broker-symbol
+    if(!todayRows.length){{
+      document.getElementById('accum-wrap').innerHTML=
+        '<div class="empty">No holdings data for '+today+'.</div>';
+      return;
+    }}
+    // Build lookups
     const prevMap={{}};
-    for(const r of prevRows)
-      prevMap[r.symbol+'|'+r.broker]=(r.holding_qty||0);
+    for(const r of prevRows) prevMap[r.symbol+'|'+r.broker]=(r.holding_qty||0);
 
-    // ── Compute cumulative prev = cumulative today - today's change ────────
-    // cumulative_prev = net_holding - today_holding + prev_holding
-    // This gives us: what was cumulative holding as of previous day
+    // Find brokers where today holding_qty increased ≥10% vs yesterday
     const accum=[];
-    for(const r of cumRows){{
-      const key   = r.symbol+'|'+r.broker;
-      const cumToday = r.net_holding||0;
-      const todayChg = todayMap[key]||0;
-      const prevChg  = prevMap[key]||0;
-      // Cumulative as of prev day = cumulative now - today's net + prev day's net
-      const cumPrev  = cumToday - todayChg + prevChg;
-
-      if(cumPrev<=0) continue;  // skip if no meaningful previous holding
+    for(const r of todayRows){{
+      const cumToday = r.holding_qty||0;
+      const cumPrev  = prevMap[r.symbol+'|'+r.broker]||0;
+      if(cumToday<=0) continue;   // only positive holdings
+      if(cumPrev<=0)  continue;   // must have held yesterday too
       const change = cumToday - cumPrev;
-      if(change<=0) continue;   // only show increases
+      if(change<=0)   continue;   // only increases
       const pct = Math.round((change/cumPrev)*10000)/100;
-      if(pct<10) continue;      // only ≥10% increase
+      if(pct<10)      continue;   // only ≥10%
 
       accum.push({{
-        symbol:r.symbol, broker:r.broker, name:r.broker_name||'',
-        cumToday, cumPrev, change, pct,
-        avg_rate:r.avg_rate||0
       }});
     }}
 
-    // Sort by pct desc
+    // Sort by pct desc, assign rank
     accum.sort((a,b)=>b.pct-a.pct);
+    accum.forEach((r,i)=>r.rank=i+1);
 
     if(!accum.length){{
       document.getElementById('accum-wrap').innerHTML=
@@ -1515,36 +1485,9 @@ async function loadAccumulation(){{
       return;
     }}
 
-    const medals=['🥇','🥈','🥉'];
-    document.getElementById('accum-wrap').innerHTML=
-      '<div class="tscroll"><table>'
-      +'<thead><tr>'
-      +'<th>#</th><th>Symbol</th><th>Broker</th>'
-      +'<th>Cumulative Holding (Today)<br><span style="font-size:10px;font-weight:400;color:var(--muted)">Avg Rate</span></th>'
-      +'<th>Cumulative Holding (Prev)</th>'
-      +'<th>Change</th>'
-      +'<th>Change %</th>'
-      +'</tr></thead>'
-      +'<tbody>'
-      +accum.map((r,i)=>{{
-        const pctColor=r.pct>=50?'var(--cyan)':r.pct>=25?'var(--amber)':'var(--green)';
-        return '<tr data-sym="'+r.symbol+'" onclick="accumClick(this)" style="cursor:pointer">'
-          +'<td class="m" style="color:var(--muted)">'+(medals[i]||i+1)+'</td>'
-          +'<td class="sym">'+r.symbol+'</td>'
-          +'<td><span class="brk">'+r.broker+'</span>'
-            +(r.name?'<div class="bname">'+r.name+'</div>':'')+'</td>'
-          +'<td><div class="m pos">'+fmt(r.cumToday)+'</div>'
-            +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(r.avg_rate)+'</div></td>'
-          +'<td class="m" style="color:var(--muted)">'+fmt(r.cumPrev)+'</td>'
-          +'<td class="m pos">+'+fmt(r.change)+'</td>'
-          +'<td><span style="background:var(--s2);color:'+pctColor+';border:1px solid '
-            +pctColor+';border-radius:6px;padding:2px 8px;font-weight:600;font-family:var(--mono)">'
-            +'+'+r.pct.toFixed(1)+'%</span></td>'
-          +'</tr>';
-      }}).join('')
-      +'</tbody></table></div>'
-      +'<div style="font-size:11px;color:var(--muted);padding:8px 12px">'
-      +accum.length+' broker-script pairs with cumulative holding increase ≥10% today · click to view in Daily Holdings</div>';
+    ACCUM_DATA=[...accum];
+    accumSortCol='pct'; accumSortAsc=false;
+    renderAccumTable();
 
   }}catch(e){{
     console.error('Accumulation error:',e);
@@ -2005,6 +1948,57 @@ async function loadWeekly(){{
   }}
 }}
 
+function sortAccum(col){{
+  if(accumSortCol===col) accumSortAsc=!accumSortAsc;
+  else{{accumSortCol=col; accumSortAsc=false;}}
+  renderAccumTable();
+}}
+
+function renderAccumTable(){{
+  if(!ACCUM_DATA.length) return;
+  const sorted=[...ACCUM_DATA].sort((a,b)=>{{
+    let va=a[accumSortCol], vb=b[accumSortCol];
+    if(typeof va==='number') return accumSortAsc?va-vb:vb-va;
+    return accumSortAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
+  }});
+  const medals=['🥇','🥈','🥉'];
+  function thSort(col,label){{
+    const arrow=accumSortCol===col?(accumSortAsc?'↑':'↓'):'↕';
+    return '<th onclick="sortAccum("'+col+'")" style="cursor:pointer;white-space:nowrap">'+label+' '+arrow+'</th>';
+  }}
+  document.getElementById('accum-wrap').innerHTML=
+    '<div class="tscroll"><table>'
+    +'<thead><tr>'
+    +thSort('rank','#')
+    +thSort('symbol','Symbol')
+    +thSort('broker','Broker')
+    +thSort('cumToday','Holding Today<br><span style="font-size:10px;font-weight:400;color:var(--muted)">Avg Rate</span>')
+    +thSort('cumPrev','Holding Prev Day')
+    +thSort('change','Change')
+    +thSort('pct','Change %')
+    +'</tr></thead><tbody>'
+    +sorted.map((r,i)=>{{
+      const pctColor=r.pct>=50?'var(--cyan)':r.pct>=25?'var(--amber)':'var(--green)';
+      return '<tr data-sym="'+r.symbol+'" onclick="accumClick(this)" style="cursor:pointer">'
+        +'<td class="m" style="color:var(--muted)">'+(medals[r.rank-1]||r.rank)+'</td>'
+        +'<td class="sym">'+r.symbol+'</td>'
+        +'<td><span class="brk">'+r.broker+'</span>'
+          +(r.name?'<div class="bname">'+r.name+'</div>':'')+'</td>'
+        +'<td><div class="m pos">'+fmt(r.cumToday)+'</div>'
+          +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(r.avg_rate)+'</div></td>'
+        +'<td class="m" style="color:var(--muted)">'+fmt(r.cumPrev)+'</td>'
+        +'<td class="m pos">+'+fmt(r.change)+'</td>'
+        +'<td><span style="background:var(--s2);color:'+pctColor
+          +';border:1px solid '+pctColor
+          +';border-radius:6px;padding:2px 8px;font-weight:600;font-family:var(--mono)">'
+          +'+'+r.pct.toFixed(1)+'%</span></td>'
+        +'</tr>';
+    }}).join('')
+    +'</tbody></table></div>'
+    +'<div style="font-size:11px;color:var(--muted);padding:8px 12px">'
+    +ACCUM_DATA.length+' broker-script pairs · click any row to view in Daily Holdings</div>';
+}}
+
 function accumClick(tr){{const sym=tr.dataset.sym;if(sym){{document.getElementById('f-sym').value=sym;applyFilters();}}}}
 
 function toggleHolder(hdr){{
@@ -2244,6 +2238,7 @@ init();
 
 // ── MANIPULATION DETECTION SYSTEM ───────────────────────────────────────────
 let MDS_DATA = [], mdsSortCol = 'score', mdsSortAsc = false;
+let ACCUM_DATA=[], accumSortCol='pct', accumSortAsc=false;
 let mdsChart = null;
 
 const MDS_THRESHOLDS = {{
