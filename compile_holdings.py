@@ -1466,21 +1466,24 @@ async function loadGainersLosers(){{
 
 // ── ACCUMULATION DETECTOR ───────────────────────────────────────────────────
 async function loadAccumulation(){{
+  document.getElementById('accum-wrap').innerHTML=
+    '<div class="empty"><div class="spinner"></div>Loading…</div>';
   try{{
-    // Simply query the pre-computed accumulation table — instant response
-    const {{data:dateRows}}=await sb.from('accumulation')
+    // Always fetch latest date from accumulation table
+    const {{data:dateRows,error:de}}=await sb.from('accumulation')
       .select('date').order('date',{{ascending:false}}).limit(1);
+    if(de) throw de;
     if(!dateRows||!dateRows.length){{
       document.getElementById('accum-wrap').innerHTML=
         '<div class="empty">No accumulation data yet. Run compile_holdings.py to populate.</div>';
       return;
     }}
     const latestDate=dateRows[0].date;
-    document.getElementById('accum-date-label').textContent='('+latestDate+')';
+    document.getElementById('accum-date-label').textContent=
+      '(latest: '+latestDate+')';
 
     const {{data,error}}=await sb.from('accumulation')
-      .select('*')
-      .eq('date',latestDate)
+      .select('*').eq('date',latestDate)
       .order('change_pct',{{ascending:false}});
     if(error) throw error;
 
@@ -1490,11 +1493,16 @@ async function loadAccumulation(){{
       return;
     }}
 
-    ACCUM_DATA=data.map((r,i)=>({{...r,
-      cumToday:r.cum_today||0, cumPrev:r.cum_prev||0,
-      change:r.change_qty||0, pct:parseFloat(r.change_pct)||0,
-      name:r.broker_name||'', avg_rate:parseFloat(r.avg_rate)||0,
-      rank:i+1
+    ACCUM_DATA=data.map((r,i)=>({{
+      symbol   : r.symbol,
+      broker   : r.broker,
+      name     : r.broker_name||'',
+      cumToday : r.cum_today||0,
+      cumPrev  : r.cum_prev||0,
+      change   : r.change_qty||0,
+      pct      : parseFloat(r.change_pct)||0,
+      avg_rate : parseFloat(r.avg_rate)||0,
+      rank     : i+1,
     }}));
     accumSortCol='pct'; accumSortAsc=false;
     renderAccumTable();
@@ -1513,7 +1521,7 @@ async function loadMarketSummary(){{
   document.getElementById('today-lbl').textContent = TODAY_STR;
   document.getElementById('gen-at').textContent    = new Date().toLocaleTimeString();
   loadGainersLosers();  // load gainers/losers in parallel
-  loadAccumulation();   // load accumulation detector in parallel
+  loadAccumulation();   // always reload — shows latest date from DB
 
   try{{
     // ── Find the most recent date with actual data ─────────────────
@@ -1974,7 +1982,7 @@ function renderAccumTable(){{
   const medals=['🥇','🥈','🥉'];
   function thSort(col,label){{
     const arrow=accumSortCol===col?(accumSortAsc?'↑':'↓'):'↕';
-    return '<th onclick="sortAccum("'+col+'")" style="cursor:pointer;white-space:nowrap">'+label+' '+arrow+'</th>';
+    return '<th data-col="'+col+'" onclick="sortAccum(this.dataset.col)" style="cursor:pointer;white-space:nowrap">'+label+' '+arrow+'</th>';
   }}
   document.getElementById('accum-wrap').innerHTML=
     '<div class="tscroll"><table>'
