@@ -2049,23 +2049,8 @@ function filterAccumTable(){{
 
 
 function renderAccumTable(data){{
-  data=data||ACCUM_DATA;
-  if(!data.length){{document.getElementById('accum-wrap').innerHTML='<div class="empty">No matching rows.</div>';return;}}
-  if(!ACCUM_DATA.length) return;
-  const sym=(document.getElementById('accum-filter-sym')?.value||'')
-    .trim().toUpperCase();
-  const brk=(document.getElementById('accum-filter-brk')?.value||'')
-    .trim();
-  const pctMin=parseFloat(document.getElementById('accum-filter-pct')?.value||10);
-  const filtered=ACCUM_DATA.filter(r=>{{
-    if(sym && !r.symbol.toUpperCase().includes(sym)) return false;
-    if(brk && String(r.broker)!==brk) return false;
-    if(r.pct<pctMin) return false;
-    return true;
-  }});
-  const cnt=document.getElementById('accum-filter-cnt');
-  if(cnt) cnt.textContent=filtered.length+' of '+ACCUM_DATA.length+' rows';
-  renderAccumTableData(filtered);
+  // Always use provided data (already filtered by filterAccumTable)
+  renderAccumTableData(data||ACCUM_DATA);
 }}
 
 function renderAccumTableData(data){{
