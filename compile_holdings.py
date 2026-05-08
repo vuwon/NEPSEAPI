@@ -2047,20 +2047,6 @@ function filterAccumTable(){{
   renderAccumTable(filtered);
 }}
 
-function filterAccumTable(){{
-  const sym = (document.getElementById('accum-filter-sym')?.value||'').trim().toUpperCase();
-  const brk = (document.getElementById('accum-filter-brk')?.value||'').trim();
-  const pct = parseFloat(document.getElementById('accum-filter-pct')?.value||10);
-  const filtered = ACCUM_DATA.filter(r=>{{
-    if(sym && !r.symbol.toUpperCase().includes(sym)) return false;
-    if(brk && String(r.broker) !== brk) return false;
-    if(r.pct < pct) return false;
-    return true;
-  }});
-  const cnt = document.getElementById('accum-filter-cnt');
-  if(cnt) cnt.textContent = filtered.length + ' of ' + ACCUM_DATA.length + ' rows';
-  renderAccumTableData(filtered);
-}}
 
 function renderAccumTable(data){{
   data=data||ACCUM_DATA;
