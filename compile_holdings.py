@@ -414,117 +414,42 @@ def upsert_broker_trades(supabase, trades_df):
 
 def compute_and_upsert_accumulation(supabase, date_str, all_holdings_df):
     """
-    Compute true cumulative holdings by fetching ALL historical data from Supabase.
-    Compares cumulative sum up to today vs cumulative sum up to prev day.
+    Calls server-side SQL function compute_accumulation() which runs entirely
+    in Postgres — no data fetching, instant execution.
     """
     try:
         df = all_holdings_df.copy()
         df["Date"] = df["Date"].astype(str)
-
         dates = sorted(df["Date"].unique(), reverse=True)
         if len(dates) < 2:
-            print("    Accumulation: need at least 2 dates in current batch, skipping")
+            print("    Accumulation: need at least 2 dates, skipping")
             return
 
         today_str = dates[0]
         prev_str  = dates[1]
         print(f"    Computing accumulation: {prev_str} -> {today_str}")
 
-        # ── Fetch ALL historical holdings from Supabase ──────────────────
-        # We need cumulative sum per broker+symbol across ALL dates
-        print("      Fetching historical holdings from Supabase...")
-        all_rows = []
-        offset = 0
-        limit  = 1000
-        while True:
-            try:
-                result = supabase.select(
-                    "holdings",
-                    columns="date,symbol,broker,broker_name,holding_qty,avg_rate",
-                    filters={},
-                    limit=limit
-                )
-                # Manual pagination via httpx
-                import httpx
-                hdrs = {**supabase.headers, "Range": f"{offset}-{offset+limit-1}"}
-                r = httpx.get(
-                    f"{supabase.url}/rest/v1/holdings",
-                    headers=hdrs,
-                    params={"select": "date,symbol,broker,broker_name,holding_qty,avg_rate",
-                            "order": "date.asc"},
-                    timeout=60,
-                )
-                batch = r.json() if r.status_code == 200 else []
-                if not batch: break
-                all_rows.extend(batch)
-                if len(batch) < limit: break
-                offset += limit
-            except Exception as e:
-                print(f"      Fetch error at offset {offset}: {e}")
-                break
+        import httpx
 
-        if not all_rows:
-            print("      No historical data found, using current batch only")
-            hist_df = df
+        # Call the server-side SQL function via RPC
+        hdrs = {**supabase.headers, "Prefer": "return=minimal"}
+        r = httpx.post(
+            f"{supabase.url}/rest/v1/rpc/compute_accumulation",
+            headers=hdrs,
+            json={
+                "p_today"   : today_str,
+                "p_prev"    : prev_str,
+                "p_min_pct" : 10
+            },
+            timeout=300,  # 5 minute timeout
+        )
+
+        if r.status_code in (200, 204):
+            print(f"    Accumulation: computed for {today_str}")
+        elif "compute_accumulation" in r.text or "42883" in r.text:
+            print(f"    Accumulation: function not found -- run create_accumulation_function.sql in Supabase")
         else:
-            hist_df = pd.DataFrame(all_rows)
-            hist_df["Date"] = hist_df["date"].astype(str)
-            hist_df["holding_qty"] = pd.to_numeric(hist_df["holding_qty"], errors="coerce").fillna(0)
-            hist_df["avg_rate"]    = pd.to_numeric(hist_df.get("avg_rate", 0), errors="coerce").fillna(0)
-            # Rename to match local df columns
-            hist_df = hist_df.rename(columns={"symbol":"Stock Symbol"})
-            print(f"      Loaded {len(hist_df):,} historical rows")
-
-        grp = ["Stock Symbol", "broker"]
-
-        # Cumulative sum up to today
-        today_cum = (hist_df[hist_df["Date"] <= today_str]
-                     .groupby(grp)
-                     .agg(cum_today  =("holding_qty", "sum"),
-                          broker_name=("broker_name", "first"),
-                          avg_rate   =("avg_rate",    "last"))
-                     .reset_index())
-
-        # Cumulative sum up to prev day
-        prev_cum = (hist_df[hist_df["Date"] <= prev_str]
-                    .groupby(grp)
-                    .agg(cum_prev=("holding_qty", "sum"))
-                    .reset_index())
-
-        merged = today_cum.merge(prev_cum, on=grp, how="left")
-        merged["cum_prev"]   = merged["cum_prev"].fillna(0)
-        merged["change_qty"] = merged["cum_today"] - merged["cum_prev"]
-        merged = merged[(merged["cum_today"]  > 0) &
-                        (merged["cum_prev"]   > 0) &
-                        (merged["change_qty"] > 0)]
-        if merged.empty:
-            print(f"      No qualifying rows for {today_str}")
-            return
-
-        merged["change_pct"] = ((merged["change_qty"] / merged["cum_prev"]) * 100).round(2)
-        merged = merged[merged["change_pct"] >= 10].copy()
-        if merged.empty:
-            print(f"      No rows with >=10% change for {today_str}")
-            return
-
-        rows = [{
-            "date"       : today_str,
-            "symbol"     : str(r["Stock Symbol"]),
-            "broker"     : int(r["broker"]),
-            "broker_name": str(r.get("broker_name") or ""),
-            "cum_today"  : int(r["cum_today"]),
-            "cum_prev"   : int(r["cum_prev"]),
-            "change_qty" : int(r["change_qty"]),
-            "change_pct" : float(r["change_pct"]),
-            "avg_rate"   : float(round(r.get("avg_rate") or 0, 2)),
-            "updated_at" : datetime.now().isoformat(),
-        } for _, r in merged.iterrows()]
-
-        CHUNK = 500
-        for i in range(0, len(rows), CHUNK):
-            supabase.upsert("accumulation", rows[i:i+CHUNK],
-                            on_conflict="date,symbol,broker")
-        print(f"    Accumulation: {len(rows)} rows upserted for {today_str}")
+            print(f"    Accumulation error: [{r.status_code}] {r.text[:200]}")
 
     except Exception as e:
         if "accumulation" in str(e) or "42P01" in str(e):
