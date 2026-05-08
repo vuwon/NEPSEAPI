@@ -370,6 +370,52 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
       <div class="ctitle">Brokers accumulating — holding up ≥10% vs previous day
         <span id="accum-date-label" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
       </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 0;align-items:center">
+        <input type="text" id="accum-filter-sym" placeholder="Filter by symbol..."
+          style="width:160px" oninput="filterAccumTable()"
+          onkeydown="if(event.key==='Escape'){this.value='';filterAccumTable();}">
+        <input type="text" id="accum-filter-brk" placeholder="Filter by broker #..."
+          style="width:140px" oninput="filterAccumTable()"
+          onkeydown="if(event.key==='Escape'){this.value='';filterAccumTable();}">
+        <select id="accum-filter-pct" onchange="filterAccumTable()" style="width:150px">
+          <option value="10">≥10% change</option>
+          <option value="25">≥25% change</option>
+          <option value="50">≥50% change</option>
+          <option value="100">≥100% change</option>
+        </select>
+        <button class="btn btn-g" onclick="document.getElementById('accum-filter-sym').value='';
+          document.getElementById('accum-filter-brk').value='';
+          document.getElementById('accum-filter-pct').value='10';
+          filterAccumTable()">Clear</button>
+        <span id="accum-filter-cnt" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 0;align-items:center">
+        <input type="text" id="accum-filter-sym" placeholder="Symbol..."
+          style="width:120px" oninput="filterAccumTable()">
+        <input type="text" id="accum-filter-brk" placeholder="Broker #..."
+          style="width:110px" oninput="filterAccumTable()">
+        <div class="fg" style="margin:0">
+          <select id="accum-filter-date" onchange="filterAccumTable()" style="font-size:12px">
+            <option value="">All dates</option>
+          </select>
+        </div>
+        <div class="fg" style="margin:0">
+          <select id="accum-filter-minhold" onchange="filterAccumTable()" style="font-size:12px">
+            <option value="5000">Prev holding &gt; 5,000</option>
+            <option value="0">All prev holdings</option>
+            <option value="1000">Prev holding &gt; 1,000</option>
+            <option value="10000">Prev holding &gt; 10,000</option>
+            <option value="50000">Prev holding &gt; 50,000</option>
+          </select>
+        </div>
+        <button class="btn btn-g" style="font-size:11px;padding:4px 10px"
+          onclick="document.getElementById('accum-filter-sym').value='';
+                   document.getElementById('accum-filter-brk').value='';
+                   document.getElementById('accum-filter-date').value='';
+                   document.getElementById('accum-filter-minhold').value='5000';
+                   filterAccumTable()">Clear</button>
+        <span id="accum-filter-cnt" style="font-size:11px;color:var(--muted)"></span>
+      </div>
       <div id="accum-wrap">
         <div class="empty"><div class="spinner"></div>Loading…</div>
       </div>
@@ -760,7 +806,7 @@ async function loadAccumulation(){
       return;
     }
 
-    ACCUM_DATA=data.map((r,i)=>({
+    ACCUM_DATA=data.map((r,i)=>({ 
       symbol   : r.symbol,
       broker   : r.broker,
       name     : r.broker_name||'',
@@ -769,12 +815,35 @@ async function loadAccumulation(){
       change   : r.change_qty||0,
       pct      : parseFloat(r.change_pct)||0,
       avg_rate : parseFloat(r.avg_rate)||0,
+      date     : r.date||latestDate,
       rank     : i+1,
     }));
     accumSortCol='pct'; accumSortAsc=false;
-    renderAccumTable();
 
-  }catch(e){
+    // Populate date dropdown
+    const {data:allDates}=await sb.from('accumulation')
+      .select('date').order('date',{ascending:false});
+    const dateSelect=document.getElementById('accum-filter-date');
+    if(dateSelect && allDates){
+      const uniqueDates=[...new Set(allDates.map(r=>r.date))];
+      dateSelect.innerHTML='<option value="">All dates</option>'+
+        uniqueDates.map(d=>`<option value="${d}"${d===latestDate?' selected':''}>${d}</option>`).join('');
+      dateSelect.onchange=async function(){
+        const selDate=this.value||latestDate;
+        const {data:nd}=await sb.from('accumulation')
+          .select('*').eq('date',selDate).order('change_pct',{ascending:false});
+        ACCUM_DATA=(nd||[]).map((r,i)=>({symbol:r.symbol,broker:r.broker,
+          name:r.broker_name||'',cumToday:r.cum_today||0,cumPrev:r.cum_prev||0,
+          change:r.change_qty||0,pct:parseFloat(r.change_pct)||0,
+          avg_rate:parseFloat(r.avg_rate)||0,date:r.date||selDate,rank:i+1}));
+        filterAccumTable();
+      };
+    }
+
+    const cnt=document.getElementById('accum-filter-cnt');
+    if(cnt) cnt.textContent=ACCUM_DATA.length+' rows';
+    filterAccumTable();
+    renderAccumTable();}catch(e){
     console.error('Accumulation error:',e);
     document.getElementById('accum-wrap').innerHTML=
       '<div class="empty">Error: '+e.message+'</div>';
@@ -1239,10 +1308,59 @@ function sortAccum(col){
   renderAccumTable();
 }
 
-function renderAccumTable(){
+function filterAccumTable(){
+  const sym      = (document.getElementById('accum-filter-sym').value||'').trim().toUpperCase();
+  const brk      = (document.getElementById('accum-filter-brk').value||'').trim();
+  const minHold  = parseInt(document.getElementById('accum-filter-minhold').value||'5000')||0;
+  const filtered = ACCUM_DATA.filter(r=>{
+    if(sym && !r.symbol.toUpperCase().includes(sym)) return false;
+    if(brk && String(r.broker).indexOf(brk) === -1) return false;
+    if(r.cumPrev < minHold) return false;
+    return true;
+  });
+  const cnt = document.getElementById('accum-filter-cnt');
+  if(cnt) cnt.textContent = filtered.length + ' of ' + ACCUM_DATA.length + ' rows';
+  renderAccumTable(filtered);
+}
+
+function filterAccumTable(){
+  const sym = (document.getElementById('accum-filter-sym')?.value||'').trim().toUpperCase();
+  const brk = (document.getElementById('accum-filter-brk')?.value||'').trim();
+  const pct = parseFloat(document.getElementById('accum-filter-pct')?.value||10);
+  const filtered = ACCUM_DATA.filter(r=>{
+    if(sym && !r.symbol.toUpperCase().includes(sym)) return false;
+    if(brk && String(r.broker) !== brk) return false;
+    if(r.pct < pct) return false;
+    return true;
+  });
+  const cnt = document.getElementById('accum-filter-cnt');
+  if(cnt) cnt.textContent = filtered.length + ' of ' + ACCUM_DATA.length + ' rows';
+  renderAccumTableData(filtered);
+}
+
+function renderAccumTable(data){
+  data=data||ACCUM_DATA;
+  if(!data.length){document.getElementById('accum-wrap').innerHTML='<div class="empty">No matching rows.</div>';return;}
   if(!ACCUM_DATA.length) return;
-  const sorted=[...ACCUM_DATA].sort((a,b)=>{
-    let va=a[accumSortCol], vb=b[accumSortCol];
+  const sym=(document.getElementById('accum-filter-sym')?.value||'')
+    .trim().toUpperCase();
+  const brk=(document.getElementById('accum-filter-brk')?.value||'')
+    .trim();
+  const pctMin=parseFloat(document.getElementById('accum-filter-pct')?.value||10);
+  const filtered=ACCUM_DATA.filter(r=>{
+    if(sym && !r.symbol.toUpperCase().includes(sym)) return false;
+    if(brk && String(r.broker)!==brk) return false;
+    if(r.pct<pctMin) return false;
+    return true;
+  });
+  const cnt=document.getElementById('accum-filter-cnt');
+  if(cnt) cnt.textContent=filtered.length+' of '+ACCUM_DATA.length+' rows';
+  renderAccumTableData(filtered);
+}
+
+function renderAccumTableData(data){
+  const sorted=[...data].sort((a,b)=>{
+    let va=a[accumSortCol],vb=b[accumSortCol];
     if(typeof va==='number') return accumSortAsc?va-vb:vb-va;
     return accumSortAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
   });
@@ -1250,6 +1368,10 @@ function renderAccumTable(){
   function thSort(col,label){
     const arrow=accumSortCol===col?(accumSortAsc?'↑':'↓'):'↕';
     return '<th data-col="'+col+'" onclick="sortAccum(this.dataset.col)" style="cursor:pointer;white-space:nowrap">'+label+' '+arrow+'</th>';
+  }
+  if(!sorted.length){
+    document.getElementById('accum-wrap').innerHTML='<div class="empty">No results match the filter.</div>';
+    return;
   }
   document.getElementById('accum-wrap').innerHTML=
     '<div class="tscroll"><table>'
@@ -1263,9 +1385,9 @@ function renderAccumTable(){
     +thSort('pct','Change %')
     +'</tr></thead><tbody>'
     +sorted.map((r,i)=>{
-      const pct2=(r.pct||0); const pctColor=pct2>=50?'var(--cyan)':pct2>=25?'var(--amber)':'var(--green)';
+      const pctColor=r.pct>=50?'var(--cyan)':r.pct>=25?'var(--amber)':'var(--green)';
       return '<tr data-sym="'+r.symbol+'" onclick="accumClick(this)" style="cursor:pointer">'
-        +'<td class="m" style="color:var(--muted)">'+(medals[r.rank-1]||r.rank)+'</td>'
+        +'<td class="m" style="color:var(--muted)">'+( medals[r.rank-1]||r.rank)+'</td>'
         +'<td class="sym">'+r.symbol+'</td>'
         +'<td><span class="brk">'+r.broker+'</span>'
           +(r.name?'<div class="bname">'+r.name+'</div>':'')+'</td>'
@@ -1281,7 +1403,7 @@ function renderAccumTable(){
     }).join('')
     +'</tbody></table></div>'
     +'<div style="font-size:11px;color:var(--muted);padding:8px 12px">'
-    +ACCUM_DATA.length+' broker-script pairs · click any row to view in Daily Holdings</div>';
+    +sorted.length+' broker-script pairs · click any row to view in Daily Holdings</div>';
 }
 
 function accumClick(tr){const sym=tr.dataset.sym;if(sym){document.getElementById('f-sym').value=sym;applyFilters();}}
