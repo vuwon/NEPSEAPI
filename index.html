@@ -206,6 +206,7 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
       <div class="th2"><span class="ttitle">Daily Holdings per Broker per Stock</span><span class="tcnt" id="cnt-d">—</span></div>
       <div class="tscroll"><table>
         <thead><tr>
+          <th style="width:36px">#</th>
           <th onclick="srtD('date')">Date ↕</th><th onclick="srtD('symbol')">Symbol ↕</th>
           <th onclick="srtD('broker')">Broker # ↕</th><th>Broker Name</th>
           <th onclick="srtD('buy_qty')">Buy Qty ↕</th><th onclick="srtD('total_sale_qty')">Sale Qty ↕</th>
@@ -213,7 +214,7 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
           <th onclick="srtD('holding_qty')">Net Holding ↕</th><th onclick="srtD('avg_rate')">Avg Rate ↕</th>
         </tr>
         <tr id="daily-summary" style="display:none;background:var(--s2);font-weight:600;border-top:2px solid var(--border2)">
-          <td colspan="4" class="m" style="color:var(--muted);font-size:11px" id="daily-sum-label">∑ Filtered total</td>
+          <td colspan="5" class="m" style="color:var(--muted);font-size:11px" id="daily-sum-label">∑ Filtered total</td>
           <td class="m pos" id="daily-sum-buy">—</td>
           <td class="m neg" id="daily-sum-sale">—</td>
           <td id="daily-sum-ipo" style="color:var(--purple)">—</td>
@@ -222,7 +223,7 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
           <td class="m" style="color:var(--amber)" id="daily-sum-rate">—</td>
         </tr>
         </thead>
-        <tbody id="tbody-d"><tr><td colspan="10"><div class="empty">Select a symbol and click Search.</div></td></tr></tbody>
+        <tbody id="tbody-d"><tr><td colspan="11"><div class="empty">Select a symbol and click Search.</div></td></tr></tbody>
       </table></div>
       <div class="pag">
         <span id="pi-d">—</span>
@@ -1431,9 +1432,11 @@ async function applyFilters(){
       const filtered = (dd||[]).filter(r=>!bname||(r.broker_name||'').toLowerCase().includes(bname));
       const brkMap={};
       for(const r of filtered){
-        const key=r.broker;
+        // Group by symbol+broker so each script shows separately
+        const key=(r.symbol||'')+'|'+r.broker;
         if(!brkMap[key]) brkMap[key]={
           symbol:r.symbol, broker:r.broker, broker_name:r.broker_name||'',
+          security_name:r.security_name||'',
           total_buy_qty:0, total_sale_qty:0, total_ipo_qty:0, total_bulk_qty:0,
           net_holding:0, total_buy_amt:0, total_bulk_amt:0
         };
@@ -1444,6 +1447,7 @@ async function applyFilters(){
         brkMap[key].net_holding     += (r.holding_qty||0);
         brkMap[key].total_buy_amt   += (r.buy_amt||0);
         brkMap[key].total_bulk_amt  += (r.bulk_sale_amt||0);
+        if(r.security_name) brkMap[key].security_name=r.security_name;
       }
       cd = Object.values(brkMap).map(b=>{
         const net = b.net_holding;
@@ -1541,7 +1545,7 @@ function renderD(){
   tb.innerHTML=sl.map(r=>{
     const hq=r.holding_qty||0,pct=Math.min(100,Math.abs(hq)/maxQ*100);
     const cls=hq>=0?'pos':'neg',fc=hq>=0?'p':'n';
-    return '<tr><td class="m">'+r.date+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m pos">'+fmt(r.buy_qty)+'</td><td class="m neg">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.ipo_sale_qty)+'</span></td><td class="m">'+fmt(r.bulk_sale_qty)+'</td><td><div class="qcell"><span class="'+cls+'">'+fmt(hq)+'</span><div class="qbar"><div class="qfill '+fc+'" style="width:'+pct+'%"></div></div></div></td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
+    return '<tr><td class="m" style="color:var(--muted)">'+(off+i+1)+'</td><td class="m">'+r.date+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m pos">'+fmt(r.buy_qty)+'</td><td class="m neg">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.ipo_sale_qty)+'</span></td><td class="m">'+fmt(r.bulk_sale_qty)+'</td><td><div class="qcell"><span class="'+cls+'">'+fmt(hq)+'</span><div class="qbar"><div class="qfill '+fc+'" style="width:'+pct+'%"></div></div></div></td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
   }).join('');
 }
 
