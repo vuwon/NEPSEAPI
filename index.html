@@ -211,7 +211,17 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
           <th onclick="srtD('buy_qty')">Buy Qty ↕</th><th onclick="srtD('total_sale_qty')">Sale Qty ↕</th>
           <th onclick="srtD('ipo_sale_qty')">IPO Sale ↕</th><th onclick="srtD('bulk_sale_qty')">Bulk Sale ↕</th>
           <th onclick="srtD('holding_qty')">Net Holding ↕</th><th onclick="srtD('avg_rate')">Avg Rate ↕</th>
-        </tr></thead>
+        </tr>
+        <tr id="daily-summary" style="display:none;background:var(--s2);font-weight:600;border-top:2px solid var(--border2)">
+          <td colspan="4" class="m" style="color:var(--muted);font-size:11px" id="daily-sum-label">∑ Filtered total</td>
+          <td class="m pos" id="daily-sum-buy">—</td>
+          <td class="m neg" id="daily-sum-sale">—</td>
+          <td id="daily-sum-ipo" style="color:var(--purple)">—</td>
+          <td class="m" id="daily-sum-bulk">—</td>
+          <td class="m" id="daily-sum-hold">—</td>
+          <td class="m" style="color:var(--amber)" id="daily-sum-rate">—</td>
+        </tr>
+        </thead>
         <tbody id="tbody-d"><tr><td colspan="10"><div class="empty">Select a symbol and click Search.</div></td></tr></tbody>
       </table></div>
       <div class="pag">
@@ -1470,6 +1480,7 @@ function resetFilters(){
   document.getElementById('f-dfrom').value='';
   document.getElementById('f-dto').value='';
   DAILY=[];CUMUL=[];FD=[];FC=[];pg.d=1;pg.c=1;mktLoaded=false;
+  document.getElementById('daily-summary').style.display='none';
   ['tbody-d','tbody-c'].forEach(id=>{document.getElementById(id).innerHTML='<tr><td colspan="10"><div class="empty">Select a symbol and click Search.</div></td></tr>';});
   document.getElementById('barchart').innerHTML='<div class="empty">Select a symbol and click Search.</div>';
   ['s-pos','s-brk','s-net','s-top'].forEach(id=>document.getElementById(id).textContent='—');
@@ -1486,6 +1497,34 @@ function doSort(arr,col,asc){
 function srtD(c){if(dCol===c)dAsc=!dAsc;else{dCol=c;dAsc=false;}pg.d=1;renderD();}
 function csrt(c){if(cCol===c)cAsc=!cAsc;else{cCol=c;cAsc=false;}pg.c=1;renderC();}
 
+function updateDailySummary(data){
+  if(!data||!data.length){
+    document.getElementById('daily-summary').style.display='none';
+    return;
+  }
+  const sumBuy  = data.reduce((s,r)=>s+(r.buy_qty||0),0);
+  const sumSale = data.reduce((s,r)=>s+(r.total_sale_qty||0),0);
+  const sumIpo  = data.reduce((s,r)=>s+(r.ipo_sale_qty||0),0);
+  const sumBulk = data.reduce((s,r)=>s+(r.bulk_sale_qty||0),0);
+  const sumHold = data.reduce((s,r)=>s+(r.holding_qty||0),0);
+  // Weighted avg rate = (sum buy_amt - sum bulk_sale_amt) / sum holding_qty
+  const sumBuyAmt  = data.reduce((s,r)=>s+(r.buy_amt||0),0);
+  const sumBulkAmt = data.reduce((s,r)=>s+(r.bulk_sale_amt||0),0);
+  const avgRate = sumHold>0 ? Math.round(((sumBuyAmt-sumBulkAmt)/sumHold)*100)/100 : 0;
+
+  const row=document.getElementById('daily-summary');
+  row.style.display='';
+  document.getElementById('daily-sum-label').textContent='∑ '+data.length.toLocaleString()+' rows (all pages)';
+  document.getElementById('daily-sum-buy').textContent  = fmt(sumBuy);
+  document.getElementById('daily-sum-sale').textContent = fmt(sumSale);
+  document.getElementById('daily-sum-ipo').innerHTML    = '<span class="ipo">'+fmt(sumIpo)+'</span>';
+  document.getElementById('daily-sum-bulk').textContent = fmt(sumBulk);
+  const nhcls=sumHold>=0?'pos':'neg';
+  document.getElementById('daily-sum-hold').className   = 'm '+nhcls;
+  document.getElementById('daily-sum-hold').textContent = fmt(sumHold);
+  document.getElementById('daily-sum-rate').textContent = sumHold>0 ? 'Rs '+fmtf(avgRate) : '—';
+}
+
 function renderD(){
   const data=doSort(FD,dCol,dAsc);
   const tot=data.length,pages=Math.max(1,Math.ceil(tot/PS));
@@ -1494,6 +1533,7 @@ function renderD(){
   const maxQ=Math.max(...FD.map(r=>Math.abs(r.holding_qty||0)),1);
   document.getElementById('cnt-d').textContent=tot.toLocaleString()+' rows';
   document.getElementById('pi-d').textContent='Page '+pg.d+' of '+pages;
+  updateDailySummary(data);  // compute totals across ALL filtered rows
   document.getElementById('pp-d').disabled=pg.d<=1;
   document.getElementById('pn-d').disabled=pg.d>=pages;
   const tb=document.getElementById('tbody-d');
