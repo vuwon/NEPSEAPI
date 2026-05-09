@@ -2275,7 +2275,8 @@ function renderD(){{
   document.getElementById('pn-d').disabled=pg.d>=pages;
   const tb=document.getElementById('tbody-d');
   if(!sl.length){{tb.innerHTML='<tr><td colspan="10"><div class="empty">No data.</div></td></tr>';return;}}
-  tb.innerHTML=sl.map(r=>{{
+  const off=(pg.d-1)*PS;
+  tb.innerHTML=sl.map((r,i)=>{{
     const hq=r.holding_qty||0,pct=Math.min(100,Math.abs(hq)/maxQ*100);
     const cls=hq>=0?'pos':'neg',fc=hq>=0?'p':'n';
     return '<tr><td class="m" style="color:var(--muted)">'+(off+i+1)+'</td><td class="m">'+r.date+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m pos">'+fmt(r.buy_qty)+'</td><td class="m neg">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.ipo_sale_qty)+'</span></td><td class="m">'+fmt(r.bulk_sale_qty)+'</td><td><div class="qcell"><span class="'+cls+'">'+fmt(hq)+'</span><div class="qbar"><div class="qfill '+fc+'" style="width:'+pct+'%"></div></div></div></td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
