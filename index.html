@@ -1639,11 +1639,11 @@ function renderCumulDrill(data){
     return '<tr>'
       +'<td class="m" style="color:var(--muted)">'+( medals[i]||i+1)+'</td>'
       +'<td class="m">'+r.date+'</td>'
-      +qr(r.buy_qty,buyRate,'pos')
-      +qr(r.total_sale_qty,sellRate,'neg')
+      +'<td>'+qr(r.buy_qty,buyRate,'pos')+'</td>'
+      +'<td>'+qr(r.total_sale_qty,sellRate,'neg')+'</td>'
       +'<td><span class="ipo">'+fmt(r.ipo_sale_qty||0)+'</span></td>'
       +'<td class="m">'+fmt(r.bulk_sale_qty||0)+'</td>'
-      +qr(r.holding_qty||0,r.avg_rate||0,nhcls)
+      +'<td>'+qr(r.holding_qty||0,r.avg_rate||0,nhcls)+'</td>'
       +'</tr>';
   }).join('');
 }
