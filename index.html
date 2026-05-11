@@ -267,6 +267,31 @@ td{padding:8px 12px;font-size:13px;white-space:nowrap}
         </div>
       </div>
     </div>
+
+    <!-- Cumulative drill-down panel -->
+    <div id="cumul-drill" style="display:none;margin-top:14px">
+      <div class="tw" style="border-color:var(--cyan)">
+        <div class="th2" style="border-bottom:1px solid var(--border)">
+          <span class="ttitle" id="cumul-drill-title">Daily breakdown</span>
+          <button class="btn btn-g" style="font-size:11px;padding:4px 10px"
+            onclick="document.getElementById('cumul-drill').style.display='none'">✕ Close</button>
+        </div>
+        <div class="tscroll"><table>
+          <thead><tr>
+            <th>#</th>
+            <th onclick="sortCumulDrill('date')">Date ↕</th>
+            <th onclick="sortCumulDrill('buy_qty')">Buy Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+            <th onclick="sortCumulDrill('total_sale_qty')">Sell Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+            <th onclick="sortCumulDrill('ipo_sale_qty')">IPO Sale ↕</th>
+            <th onclick="sortCumulDrill('bulk_sale_qty')">Bulk Sale ↕</th>
+            <th onclick="sortCumulDrill('holding_qty')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          </tr></thead>
+          <tbody id="cumul-drill-tbody">
+            <tr><td colspan="7"><div class="empty">Click any row above to see daily breakdown.</div></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
   </div>
 
   <!-- TAB 3: TOP BROKERS CHART -->
@@ -1550,6 +1575,79 @@ function renderD(){
   }).join('');
 }
 
+let CUMUL_DRILL=[], cumulDrillCol='holding_qty', cumulDrillAsc=false;
+
+function sortCumulDrill(col){
+  if(cumulDrillCol===col) cumulDrillAsc=!cumulDrillAsc;
+  else{cumulDrillCol=col; cumulDrillAsc=false;}
+  renderCumulDrill(CUMUL_DRILL);
+}
+
+function cumulDrillClick(tr){
+  openCumulDrill(tr.dataset.sym, parseInt(tr.dataset.brk), tr.dataset.name||'');
+}
+
+async function openCumulDrill(symbol, broker, brokerName){
+  const dfrom = document.getElementById('f-dfrom').value;
+  const dto   = document.getElementById('f-dto').value;
+  const panel = document.getElementById('cumul-drill');
+  panel.style.display='';
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+  document.getElementById('cumul-drill-title').textContent=
+    'Daily breakdown — '+symbol+' · Broker '+broker+' ('+brokerName+')'+
+    (dfrom?' · '+dfrom+' → '+dto:' · all dates')+' (top 10 holding days)';
+  document.getElementById('cumul-drill-tbody').innerHTML=
+    '<tr><td colspan="7"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
+
+  try{
+    let q=sb.from('holdings').select(
+      'date,buy_qty,buy_amt,total_sale_qty,ipo_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty,avg_rate'
+    ).eq('symbol',symbol).eq('broker',broker)
+     .order('holding_qty',{ascending:false}).limit(10);
+    if(dfrom) q=q.gte('date',dfrom);
+    if(dto)   q=q.lte('date',dto);
+    const {data,error}=await q;
+    if(error) throw error;
+    CUMUL_DRILL=(data||[]);
+    cumulDrillCol='holding_qty'; cumulDrillAsc=false;
+    renderCumulDrill(CUMUL_DRILL);
+  }catch(e){
+    document.getElementById('cumul-drill-tbody').innerHTML=
+      '<tr><td colspan="7"><div class="empty">Error: '+e.message+'</div></td></tr>';
+  }
+}
+
+function renderCumulDrill(data){
+  const tb=document.getElementById('cumul-drill-tbody');
+  if(!data||!data.length){
+    tb.innerHTML='<tr><td colspan="7"><div class="empty">No data.</div></td></tr>';return;
+  }
+  const sorted=[...data].sort((a,b)=>{
+    let va=a[cumulDrillCol],vb=b[cumulDrillCol];
+    if(typeof va==='number') return cumulDrillAsc?va-vb:vb-va;
+    return cumulDrillAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
+  });
+  const medals=['🥇','🥈','🥉'];
+  function qr(qty,rate,cls){
+    return '<div class="brk-cell"><div class="m '+cls+'" style="font-size:12px">'+fmt(qty)+'</div>'
+      +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(rate)+'</div></div>';
+  }
+  tb.innerHTML=sorted.map((r,i)=>{
+    const buyRate  = r.buy_qty>0   ? Math.round((r.buy_amt/r.buy_qty)*100)/100        : 0;
+    const sellRate = r.bulk_sale_qty>0 ? Math.round((r.bulk_sale_amt/r.bulk_sale_qty)*100)/100 : 0;
+    const nhcls    = (r.holding_qty||0)>=0?'pos':'neg';
+    return '<tr>'
+      +'<td class="m" style="color:var(--muted)">'+( medals[i]||i+1)+'</td>'
+      +'<td class="m">'+r.date+'</td>'
+      +qr(r.buy_qty,buyRate,'pos')
+      +qr(r.total_sale_qty,sellRate,'neg')
+      +'<td><span class="ipo">'+fmt(r.ipo_sale_qty||0)+'</span></td>'
+      +'<td class="m">'+fmt(r.bulk_sale_qty||0)+'</td>'
+      +qr(r.holding_qty||0,r.avg_rate||0,nhcls)
+      +'</tr>';
+  }).join('');
+}
+
 function renderC(){
   const data=doSort(FC,cCol,cAsc);
   const tot=data.length,pages=Math.max(1,Math.ceil(tot/PS));
@@ -1592,7 +1690,7 @@ function renderC(){
   tb.innerHTML=sl.map((r,i)=>{
     const rank=off+i+1,medal=medals[rank-1]||'#'+rank;
     const nh=r.net_holding||0,cls=nh>=0?'pos':'neg';
-    return '<tr><td class="m" style="color:var(--muted)">'+medal+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m pos">'+fmt(r.total_buy_qty)+'</td><td class="m neg">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.total_ipo_qty)+'</span></td><td class="m">'+fmt(r.total_bulk_qty)+'</td><td class="'+cls+'">'+fmt(nh)+'</td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
+    return '<tr style="cursor:pointer" data-sym="'+r.symbol+'" data-brk="'+r.broker+'" data-name="'+(r.broker_name||'').replace(/"/g,'&quot;')+'" onclick="cumulDrillClick(this)">'+'<td class="m" style="color:var(--muted)">'+medal+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m pos">'+fmt(r.total_buy_qty)+'</td><td class="m neg">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.total_ipo_qty)+'</span></td><td class="m">'+fmt(r.total_bulk_qty)+'</td><td class="'+cls+'">'+fmt(nh)+'</td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
   }).join('');
 }
 
