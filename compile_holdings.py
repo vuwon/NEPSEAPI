@@ -1049,31 +1049,36 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
     </div>
   </div>
 
-  <!-- TAB 3: TOP BROKERS CHART -->
+  <!-- TAB 3: TOP BROKERS CHART + ALL BROKERS TABLE -->
   <div id="tab-topb" style="display:none">
     <div class="cw" style="margin-bottom:14px">
       <div class="ctitle" id="chart-title">Select a stock symbol to see top brokers</div>
       <div class="barchart" id="barchart"><div class="empty">Use the Stock Symbol filter above and click Search.</div></div>
     </div>
-    <!-- All brokers table -->
+    <!-- All brokers total net holding table — loads automatically, no symbol needed -->
     <div class="tw">
       <div class="th2">
-        <span class="ttitle" id="topb-table-title">All brokers — net holdings</span>
+        <span class="ttitle">All brokers — total net holding (all scripts combined)</span>
         <span class="tcnt" id="topb-table-cnt"></span>
+      </div>
+      <div style="padding:6px 12px 10px;border-bottom:1px solid var(--border)">
+        <input type="text" id="topb-filter-brk" placeholder="Filter by broker # or name..."
+          style="width:240px" oninput="filterTopbTable()">
       </div>
       <div class="tscroll"><table>
         <thead><tr>
           <th>#</th>
           <th onclick="sortTopbTable('broker')">Broker ↕</th>
-          <th>Broker Name</th>
-          <th onclick="sortTopbTable('total_buy_qty')">Buy Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
-          <th onclick="sortTopbTable('total_sale_qty')">Sale Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortTopbTable('broker_name')">Broker Name ↕</th>
+          <th onclick="sortTopbTable('total_buy_qty')">Total Buy ↕</th>
+          <th onclick="sortTopbTable('total_sale_qty')">Total Sale ↕</th>
           <th onclick="sortTopbTable('total_ipo_qty')">IPO Sale ↕</th>
           <th onclick="sortTopbTable('total_bulk_qty')">Bulk Sale ↕</th>
-          <th onclick="sortTopbTable('net_holding')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortTopbTable('net_holding')">Net Holding ↕</th>
+          <th onclick="sortTopbTable('scripts')">Scripts ↕</th>
         </tr></thead>
         <tbody id="topb-table-tbody">
-          <tr><td colspan="8"><div class="empty">Select a symbol and click Search.</div></td></tr>
+          <tr><td colspan="9"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>
         </tbody>
       </table></div>
     </div>
@@ -2506,7 +2511,7 @@ function renderC(){{
   }}).join('');
 }}
 
-let TOPB_DATA=[], topbSortCol='net_holding', topbSortAsc=false;
+let TOPB_DATA=[], TOPB_FILTERED=[], topbSortCol='net_holding', topbSortAsc=false;
 
 function sortTopbTable(col){{
   if(topbSortCol===col) topbSortAsc=!topbSortAsc;
@@ -2514,12 +2519,20 @@ function sortTopbTable(col){{
   renderTopbTable();
 }}
 
+function filterTopbTable(){{
+  const q=(document.getElementById('topb-filter-brk')?.value||'').trim().toLowerCase();
+  TOPB_FILTERED=q
+    ? TOPB_DATA.filter(r=>String(r.broker).includes(q)||(r.broker_name||'').toLowerCase().includes(q))
+    : [...TOPB_DATA];
+  renderTopbTable();
+}}
+
 function renderTopbTable(){{
   const tb=document.getElementById('topb-table-tbody');
-  if(!TOPB_DATA.length){{
-    tb.innerHTML='<tr><td colspan="8"><div class="empty">No data.</div></td></tr>';return;
-  }}
-  const sorted=[...TOPB_DATA].sort((a,b)=>{{
+  const data=TOPB_FILTERED.length||document.getElementById('topb-filter-brk')?.value
+    ? TOPB_FILTERED : TOPB_DATA;
+  if(!data.length){{tb.innerHTML='<tr><td colspan="9"><div class="empty">No data.</div></td></tr>';return;}}
+  const sorted=[...data].sort((a,b)=>{{
     let va=a[topbSortCol],vb=b[topbSortCol];
     if(typeof va==='number') return topbSortAsc?va-vb:vb-va;
     return topbSortAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
@@ -2527,24 +2540,54 @@ function renderTopbTable(){{
   const medals=['🥇','🥈','🥉'];
   tb.innerHTML=sorted.map((r,i)=>{{
     const nh=r.net_holding||0, cls=nh>=0?'pos':'neg';
-    const buyRate = r.total_buy_qty>0
-      ? Math.round((r.total_buy_amt/r.total_buy_qty)*100)/100 : 0;
-    const bulkRate= r.total_bulk_qty>0
-      ? Math.round((r.total_bulk_amt/r.total_bulk_qty)*100)/100 : 0;
     return '<tr>'
       +'<td class="m" style="color:var(--muted)">'+(medals[i]||i+1)+'</td>'
       +'<td><span class="brk">'+r.broker+'</span></td>'
       +'<td class="bname">'+(r.broker_name||'—')+'</td>'
-      +'<td><div class="m pos">'+fmt(r.total_buy_qty)+'</div>'
-        +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(buyRate)+'</div></td>'
-      +'<td class="m neg">'+fmt(r.total_sale_qty)+'</td>'
+      +'<td class="m pos">'+fmt(r.total_buy_qty||0)+'</td>'
+      +'<td class="m neg">'+fmt(r.total_sale_qty||0)+'</td>'
       +'<td><span class="ipo">'+fmt(r.total_ipo_qty||0)+'</span></td>'
       +'<td class="m">'+fmt(r.total_bulk_qty||0)+'</td>'
-      +'<td><div class="m '+cls+'">'+fmt(nh)+'</div>'
-        +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(r.avg_rate||0)+'</div></td>'
+      +'<td class="m '+cls+'">'+fmt(nh)+'</td>'
+      +'<td class="m" style="color:var(--muted)">'+r.scripts+'</td>'
       +'</tr>';
   }}).join('');
-  document.getElementById('topb-table-cnt').textContent=sorted.length+' brokers';
+  document.getElementById('topb-table-cnt').textContent=
+    sorted.length+' brokers'+(TOPB_DATA.length!==sorted.length?' (filtered from '+TOPB_DATA.length+')':'');
+}}
+
+async function loadTopbTable(){{
+  try{{
+    let rows=[], off=0, lim=1000;
+    while(true){{
+      const {{data,error}}=await sb.from('cumulative')
+        .select('broker,broker_name,total_buy_qty,total_sale_qty,total_ipo_qty,total_bulk_qty,net_holding')
+        .range(off,off+lim-1);
+      if(error) throw error;
+      rows.push(...(data||[]));
+      if(!data||data.length<lim) break;
+      off+=lim;
+    }}
+    const brkMap={{}};
+    for(const r of rows){{
+      const k=r.broker;
+      if(!brkMap[k]) brkMap[k]={{broker:r.broker,broker_name:r.broker_name||'',
+        total_buy_qty:0,total_sale_qty:0,total_ipo_qty:0,total_bulk_qty:0,net_holding:0,scripts:0}};
+      brkMap[k].total_buy_qty  +=(r.total_buy_qty||0);
+      brkMap[k].total_sale_qty +=(r.total_sale_qty||0);
+      brkMap[k].total_ipo_qty  +=(r.total_ipo_qty||0);
+      brkMap[k].total_bulk_qty +=(r.total_bulk_qty||0);
+      brkMap[k].net_holding    +=(r.net_holding||0);
+      brkMap[k].scripts        +=1;
+      if(r.broker_name) brkMap[k].broker_name=r.broker_name;
+    }}
+    TOPB_DATA=Object.values(brkMap).sort((a,b)=>b.net_holding-a.net_holding);
+    TOPB_FILTERED=[...TOPB_DATA];
+    renderTopbTable();
+  }}catch(e){{
+    document.getElementById('topb-table-tbody').innerHTML=
+      '<tr><td colspan="9"><div class="empty">Error: '+e.message+'</div></td></tr>';
+  }}
 }}
 
 function renderChart(sym){{
@@ -2568,7 +2611,7 @@ function showTab(name){{
   document.querySelectorAll('.tab').forEach((el,i)=>{{
     el.classList.toggle('active',['daily','cumul','topb','mkt','cmp'][i]===name);
   }});
-  if(name==='topb') renderChart(document.getElementById('f-sym').value);
+  if(name==='topb'){{renderChart(document.getElementById('f-sym').value);loadTopbTable();}}
   if(name==='mkt')  loadMarketSummary();
   if(name==='cmp')  initCmp();
 }}
