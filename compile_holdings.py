@@ -1051,9 +1051,31 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
 
   <!-- TAB 3: TOP BROKERS CHART -->
   <div id="tab-topb" style="display:none">
-    <div class="cw">
+    <div class="cw" style="margin-bottom:14px">
       <div class="ctitle" id="chart-title">Select a stock symbol to see top brokers</div>
       <div class="barchart" id="barchart"><div class="empty">Use the Stock Symbol filter above and click Search.</div></div>
+    </div>
+    <!-- All brokers table -->
+    <div class="tw">
+      <div class="th2">
+        <span class="ttitle" id="topb-table-title">All brokers — net holdings</span>
+        <span class="tcnt" id="topb-table-cnt"></span>
+      </div>
+      <div class="tscroll"><table>
+        <thead><tr>
+          <th>#</th>
+          <th onclick="sortTopbTable('broker')">Broker ↕</th>
+          <th>Broker Name</th>
+          <th onclick="sortTopbTable('total_buy_qty')">Buy Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortTopbTable('total_sale_qty')">Sale Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+          <th onclick="sortTopbTable('total_ipo_qty')">IPO Sale ↕</th>
+          <th onclick="sortTopbTable('total_bulk_qty')">Bulk Sale ↕</th>
+          <th onclick="sortTopbTable('net_holding')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+        </tr></thead>
+        <tbody id="topb-table-tbody">
+          <tr><td colspan="8"><div class="empty">Select a symbol and click Search.</div></td></tr>
+        </tbody>
+      </table></div>
     </div>
   </div>
 
@@ -2253,6 +2275,16 @@ async function applyFilters(){{
     document.getElementById('s-top').textContent=top?top.broker:'—';
     document.getElementById('s-top-name').textContent=top?(top.broker_name||''):'by net holding';
     pg.d=1;pg.c=1;renderD();renderC();renderChart(sym);
+    // Populate all-brokers table in Tab 3 using FC (full cumulative data for symbol)
+    TOPB_DATA=FC.map(r=>({{symbol:r.symbol,broker:r.broker,broker_name:r.broker_name,
+      total_buy_qty:r.total_buy_qty||0,total_buy_amt:r.total_buy_amt||0,
+      total_sale_qty:r.total_sale_qty||0,total_ipo_qty:r.total_ipo_qty||0,
+      total_bulk_qty:r.total_bulk_qty||0,total_bulk_amt:r.total_bulk_amt||0,
+      net_holding:r.net_holding||0,avg_rate:r.avg_rate||0}}));
+    topbSortCol='net_holding'; topbSortAsc=false;
+    const ttl=document.getElementById('topb-table-title');
+    if(ttl) ttl.textContent='All brokers — '+sym+' net holdings'+(dfrom?' ('+dfrom+' → '+dto+')':'');
+    renderTopbTable();
     setStatus('<b>'+DAILY.length.toLocaleString()+'</b> daily positions · <b>'+CUMUL.length+'</b> cumulative'+(sym?' for <b>'+sym+'</b>':''));
   }}catch(e){{setStatus('Error: '+e.message,true);}}
   finally{{loading=false;}}
@@ -2472,6 +2504,47 @@ function renderC(){{
     const nh=r.net_holding||0,cls=nh>=0?'pos':'neg';
     return '<tr style="cursor:pointer" data-sym="'+r.symbol+'" data-brk="'+r.broker+'" data-name="'+(r.broker_name||'').replace(/"/g,'&quot;')+'" onclick="cumulDrillClick(this)">'+'<td class="m" style="color:var(--muted)">'+medal+'</td><td class="sym">'+r.symbol+'</td><td><span class="brk">'+r.broker+'</span></td><td class="bname">'+(r.broker_name||'—')+'</td><td class="m pos">'+fmt(r.total_buy_qty)+'</td><td class="m neg">'+fmt(r.total_sale_qty)+'</td><td><span class="ipo">'+fmt(r.total_ipo_qty)+'</span></td><td class="m">'+fmt(r.total_bulk_qty)+'</td><td class="'+cls+'">'+fmt(nh)+'</td><td class="m" style="color:var(--amber)">'+fmtf(r.avg_rate)+'</td></tr>';
   }}).join('');
+}}
+
+let TOPB_DATA=[], topbSortCol='net_holding', topbSortAsc=false;
+
+function sortTopbTable(col){{
+  if(topbSortCol===col) topbSortAsc=!topbSortAsc;
+  else{{topbSortCol=col; topbSortAsc=false;}}
+  renderTopbTable();
+}}
+
+function renderTopbTable(){{
+  const tb=document.getElementById('topb-table-tbody');
+  if(!TOPB_DATA.length){{
+    tb.innerHTML='<tr><td colspan="8"><div class="empty">No data.</div></td></tr>';return;
+  }}
+  const sorted=[...TOPB_DATA].sort((a,b)=>{{
+    let va=a[topbSortCol],vb=b[topbSortCol];
+    if(typeof va==='number') return topbSortAsc?va-vb:vb-va;
+    return topbSortAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
+  }});
+  const medals=['🥇','🥈','🥉'];
+  tb.innerHTML=sorted.map((r,i)=>{{
+    const nh=r.net_holding||0, cls=nh>=0?'pos':'neg';
+    const buyRate = r.total_buy_qty>0
+      ? Math.round((r.total_buy_amt/r.total_buy_qty)*100)/100 : 0;
+    const bulkRate= r.total_bulk_qty>0
+      ? Math.round((r.total_bulk_amt/r.total_bulk_qty)*100)/100 : 0;
+    return '<tr>'
+      +'<td class="m" style="color:var(--muted)">'+(medals[i]||i+1)+'</td>'
+      +'<td><span class="brk">'+r.broker+'</span></td>'
+      +'<td class="bname">'+(r.broker_name||'—')+'</td>'
+      +'<td><div class="m pos">'+fmt(r.total_buy_qty)+'</div>'
+        +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(buyRate)+'</div></td>'
+      +'<td class="m neg">'+fmt(r.total_sale_qty)+'</td>'
+      +'<td><span class="ipo">'+fmt(r.total_ipo_qty||0)+'</span></td>'
+      +'<td class="m">'+fmt(r.total_bulk_qty||0)+'</td>'
+      +'<td><div class="m '+cls+'">'+fmt(nh)+'</div>'
+        +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(r.avg_rate||0)+'</div></td>'
+      +'</tr>';
+  }}).join('');
+  document.getElementById('topb-table-cnt').textContent=sorted.length+' brokers';
 }}
 
 function renderChart(sym){{
