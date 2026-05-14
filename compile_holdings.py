@@ -2359,8 +2359,10 @@ async function openCumulDrill(symbol, broker, brokerName){{
   document.getElementById('cumul-drill-title').textContent=
     'Daily breakdown — '+symbol+' · Broker '+broker+' ('+brokerName+')'+
     (dfrom?' · '+dfrom+' → '+dto:' · all dates')+' (top 10 holding days)';
-  document.getElementById('cumul-drill-tbody').innerHTML=
-    '<tr><td colspan="7"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
+  document.getElementById('cumul-drill-hold-tbody').innerHTML=
+    '<tr><td colspan="4"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
+  document.getElementById('cumul-drill-sale-tbody').innerHTML=
+    '<tr><td colspan="4"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
 
   try{{
     // Fetch all data in date range for this broker+symbol (no limit — need both top holds and top sales)
@@ -2371,6 +2373,7 @@ async function openCumulDrill(symbol, broker, brokerName){{
     if(dto)   q=q.lte('date',dto);
     const {{data,error}}=await q;
     if(error) throw error;
+    console.log('Drill data:', data?.length, 'rows for', symbol, broker);
     CUMUL_DRILL=(data||[]);
     cumulDrillHCol='holding_qty'; cumulDrillHAsc=false;
     cumulDrillSCol='total_sale_qty'; cumulDrillSAsc=false;
