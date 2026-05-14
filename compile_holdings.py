@@ -1009,20 +1009,42 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
           <button class="btn btn-g" style="font-size:11px;padding:4px 10px"
             onclick="document.getElementById('cumul-drill').style.display='none'">✕ Close</button>
         </div>
-        <div class="tscroll"><table>
-          <thead><tr>
-            <th>#</th>
-            <th onclick="sortCumulDrill('date')">Date ↕</th>
-            <th onclick="sortCumulDrill('buy_qty')">Buy Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
-            <th onclick="sortCumulDrill('total_sale_qty')">Sell Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
-            <th onclick="sortCumulDrill('ipo_sale_qty')">IPO Sale ↕</th>
-            <th onclick="sortCumulDrill('bulk_sale_qty')">Bulk Sale ↕</th>
-            <th onclick="sortCumulDrill('holding_qty')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
-          </tr></thead>
-          <tbody id="cumul-drill-tbody">
-            <tr><td colspan="7"><div class="empty">Click any row above to see daily breakdown.</div></td></tr>
-          </tbody>
-        </table></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px">
+          <!-- Top 10 Holdings -->
+          <div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;font-weight:500">
+              Top 10 holding days
+            </div>
+            <div class="tscroll"><table>
+              <thead><tr>
+                <th>#</th>
+                <th onclick="sortCumulDrill('h','date')">Date ↕</th>
+                <th onclick="sortCumulDrill('h','holding_qty')">Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+                <th onclick="sortCumulDrill('h','buy_qty')">Buy Qty ↕</th>
+              </tr></thead>
+              <tbody id="cumul-drill-hold-tbody">
+                <tr><td colspan="4"><div class="empty">Click a row above.</div></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+          <!-- Top 10 Sales -->
+          <div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;font-weight:500">
+              Top 10 selling days
+            </div>
+            <div class="tscroll"><table>
+              <thead><tr>
+                <th>#</th>
+                <th onclick="sortCumulDrill('s','date')">Date ↕</th>
+                <th onclick="sortCumulDrill('s','total_sale_qty')">Sell Qty ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
+                <th onclick="sortCumulDrill('s','ipo_sale_qty')">IPO ↕</th>
+              </tr></thead>
+              <tbody id="cumul-drill-sale-tbody">
+                <tr><td colspan="4"><div class="empty">Click a row above.</div></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -2308,12 +2330,20 @@ function renderD(){{
   }}).join('');
 }}
 
-let CUMUL_DRILL=[], cumulDrillCol='holding_qty', cumulDrillAsc=false;
+let CUMUL_DRILL=[];
+let cumulDrillHCol='holding_qty', cumulDrillHAsc=false;
+let cumulDrillSCol='total_sale_qty', cumulDrillSAsc=false;
 
-function sortCumulDrill(col){{
-  if(cumulDrillCol===col) cumulDrillAsc=!cumulDrillAsc;
-  else{{cumulDrillCol=col; cumulDrillAsc=false;}}
-  renderCumulDrill(CUMUL_DRILL);
+function sortCumulDrill(side, col){{
+  if(side==='h'){{
+    if(cumulDrillHCol===col) cumulDrillHAsc=!cumulDrillHAsc;
+    else{{cumulDrillHCol=col; cumulDrillHAsc=false;}}
+    renderCumulDrillHold(CUMUL_DRILL);
+  }} else {{
+    if(cumulDrillSCol===col) cumulDrillSAsc=!cumulDrillSAsc;
+    else{{cumulDrillSCol=col; cumulDrillSAsc=false;}}
+    renderCumulDrillSale(CUMUL_DRILL);
+  }}
 }}
 
 function cumulDrillClick(tr){{
@@ -2333,50 +2363,64 @@ async function openCumulDrill(symbol, broker, brokerName){{
     '<tr><td colspan="7"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
 
   try{{
+    // Fetch all data in date range for this broker+symbol (no limit — need both top holds and top sales)
     let q=sb.from('holdings').select(
       'date,buy_qty,buy_amt,total_sale_qty,ipo_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty,avg_rate'
-    ).eq('symbol',symbol).eq('broker',broker)
-     .order('holding_qty',{{ascending:false}}).limit(10);
+    ).eq('symbol',symbol).eq('broker',broker).order('date',{{ascending:false}}).limit(500);
     if(dfrom) q=q.gte('date',dfrom);
     if(dto)   q=q.lte('date',dto);
     const {{data,error}}=await q;
     if(error) throw error;
     CUMUL_DRILL=(data||[]);
-    cumulDrillCol='holding_qty'; cumulDrillAsc=false;
-    renderCumulDrill(CUMUL_DRILL);
+    cumulDrillHCol='holding_qty'; cumulDrillHAsc=false;
+    cumulDrillSCol='total_sale_qty'; cumulDrillSAsc=false;
+    renderCumulDrillHold(CUMUL_DRILL);
+    renderCumulDrillSale(CUMUL_DRILL);
   }}catch(e){{
-    document.getElementById('cumul-drill-tbody').innerHTML=
-      '<tr><td colspan="7"><div class="empty">Error: '+e.message+'</div></td></tr>';
+    const msg='<tr><td colspan="4"><div class="empty">Error: '+e.message+'</div></td></tr>';
+    document.getElementById('cumul-drill-hold-tbody').innerHTML=msg;
+    document.getElementById('cumul-drill-sale-tbody').innerHTML=msg;
   }}
 }}
 
-function renderCumulDrill(data){{
-  const tb=document.getElementById('cumul-drill-tbody');
-  if(!data||!data.length){{
-    tb.innerHTML='<tr><td colspan="7"><div class="empty">No data.</div></td></tr>';return;
-  }}
-  const sorted=[...data].sort((a,b)=>{{
-    let va=a[cumulDrillCol],vb=b[cumulDrillCol];
-    if(typeof va==='number') return cumulDrillAsc?va-vb:vb-va;
-    return cumulDrillAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
+function doSort(arr, col, asc){{
+  return [...arr].sort((a,b)=>{{
+    let va=a[col],vb=b[col];
+    if(typeof va==='number') return asc?va-vb:vb-va;
+    return asc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
   }});
+}}
+
+function renderCumulDrillHold(data){{
+  const tb=document.getElementById('cumul-drill-hold-tbody');
+  if(!data||!data.length){{tb.innerHTML='<tr><td colspan="4"><div class="empty">No data.</div></td></tr>';return;}}
+  const sorted=doSort(data,cumulDrillHCol,cumulDrillHAsc).slice(0,10);
   const medals=['🥇','🥈','🥉'];
-  function qr(qty,rate,cls){{
-    return '<div class="brk-cell"><div class="m '+cls+'" style="font-size:12px">'+fmt(qty)+'</div>'
-      +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(rate)+'</div></div>';
-  }}
   tb.innerHTML=sorted.map((r,i)=>{{
-    const buyRate  = r.buy_qty>0   ? Math.round((r.buy_amt/r.buy_qty)*100)/100        : 0;
-    const sellRate = r.bulk_sale_qty>0 ? Math.round((r.bulk_sale_amt/r.bulk_sale_qty)*100)/100 : 0;
-    const nhcls    = (r.holding_qty||0)>=0?'pos':'neg';
+    const nhcls=(r.holding_qty||0)>=0?'pos':'neg';
     return '<tr>'
-      +'<td class="m" style="color:var(--muted)">'+( medals[i]||i+1)+'</td>'
+      +'<td class="m" style="color:var(--muted)">'+(medals[i]||i+1)+'</td>'
       +'<td class="m">'+r.date+'</td>'
-      +'<td>'+qr(r.buy_qty,buyRate,'pos')+'</td>'
-      +'<td>'+qr(r.total_sale_qty,sellRate,'neg')+'</td>'
+      +'<td><div class="m '+nhcls+'" style="font-size:12px">'+fmt(r.holding_qty||0)+'</div>'
+        +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(r.avg_rate||0)+'</div></td>'
+      +'<td class="m pos">'+fmt(r.buy_qty||0)+'</td>'
+      +'</tr>';
+  }}).join('');
+}}
+
+function renderCumulDrillSale(data){{
+  const tb=document.getElementById('cumul-drill-sale-tbody');
+  if(!data||!data.length){{tb.innerHTML='<tr><td colspan="4"><div class="empty">No data.</div></td></tr>';return;}}
+  const sorted=doSort(data,cumulDrillSCol,cumulDrillSAsc).slice(0,10);
+  const medals=['🥇','🥈','🥉'];
+  tb.innerHTML=sorted.map((r,i)=>{{
+    const sellRate=r.bulk_sale_qty>0?Math.round((r.bulk_sale_amt/r.bulk_sale_qty)*100)/100:0;
+    return '<tr>'
+      +'<td class="m" style="color:var(--muted)">'+(medals[i]||i+1)+'</td>'
+      +'<td class="m">'+r.date+'</td>'
+      +'<td><div class="m neg" style="font-size:12px">'+fmt(r.total_sale_qty||0)+'</div>'
+        +'<div style="color:var(--amber);font-size:10px">Rs '+fmtf(sellRate)+'</div></td>'
       +'<td><span class="ipo">'+fmt(r.ipo_sale_qty||0)+'</span></td>'
-      +'<td class="m">'+fmt(r.bulk_sale_qty||0)+'</td>'
-      +'<td>'+qr(r.holding_qty||0,r.avg_rate||0,nhcls)+'</td>'
       +'</tr>';
   }}).join('');
 }}
