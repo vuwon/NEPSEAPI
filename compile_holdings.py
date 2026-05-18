@@ -118,7 +118,7 @@ class SupabaseClient:
 
 # ── Second Supabase project for broker_trades ────────────────────────────────
 TRADES_URL  = "https://fmseizcubbieodvfutby.supabase.co"
-TRADES_KEY  = os.environ.get("TRADES_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2VpemN1YmJpZW9kdmZ1dGJ5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTA1MjU1OSwiZXhwIjoyMDk0NjI4NTU5fQ.kqsS0SsOto6OC0o9TherbNCQL50EAVMHD8PZaBJBv78")
+TRADES_KEY  = os.environ.get("TRADES_KEY", "")
 
 def get_trades_supabase() -> SupabaseClient:
     """Secondary Supabase client for broker_trades table."""
@@ -1450,7 +1450,7 @@ const SUPABASE_URL = "{SUPABASE_URL}";
 const SUPABASE_ANON_KEY = "{SUPABASE_ANON_KEY}";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const TRADES_URL="https://fmseizcubbieodvfutby.supabase.co";
-const TRADES_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2VpemN1YmJpZW9kdmZ1dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTI1NTksImV4cCI6MjA5NDYyODU1OX0.1n3_mr-wUUoOpHF2pcz-K503dNcvuI842aW0fTYOQn0";
+const TRADES_ANON="";
 const sbTrades=supabase.createClient(TRADES_URL,TRADES_ANON);
 
 let DAILY=[],CUMUL=[],FD=[],FC=[];
