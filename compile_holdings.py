@@ -116,6 +116,14 @@ class SupabaseClient:
         return int(count_val) if count_val.isdigit() else 0
 
 
+# ── Second Supabase project for broker_trades ────────────────────────────────
+TRADES_URL  = "https://fmseizcubbieodvfutby.supabase.co"
+TRADES_KEY  = os.environ.get("TRADES_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2VpemN1YmJpZW9kdmZ1dGJ5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTA1MjU1OSwiZXhwIjoyMDk0NjI4NTU5fQ.kqsS0SsOto6OC0o9TherbNCQL50EAVMHD8PZaBJBv78")
+
+def get_trades_supabase() -> SupabaseClient:
+    """Secondary Supabase client for broker_trades table."""
+    return SupabaseClient(TRADES_URL, TRADES_KEY)
+
 def get_supabase() -> SupabaseClient:
     url = os.environ.get("SUPABASE_URL","")
     key = os.environ.get("SUPABASE_KEY","")
@@ -614,7 +622,8 @@ def main():
         vol = compute_daily_volume(df)
 
         # Compute buyer-seller pairs from raw transactions
-        trades = compute_broker_trades(df)
+        # broker_trades disabled to save DB space
+        # trades = compute_broker_trades(df)
 
         # Aggregate holdings
         agg = aggregate_one_file(df)
@@ -641,16 +650,15 @@ def main():
                 agg_copy["broker_name"] = agg_copy.get("broker_name", pd.Series([""]* len(agg_copy))).fillna("")
         agg_frames_copy.append(agg_copy)
         vol_frames.append(vol)
-        # Upsert broker trades immediately
+        # Compute and upsert broker_trades to SECOND Supabase project
         try:
-            upsert_broker_trades(supabase, trades)
+            trades = compute_broker_trades(df)
+            trades_sb = get_trades_supabase()
+            upsert_broker_trades(trades_sb, trades)
+            del trades
         except Exception as e:
-            err = str(e)
-            if any(x in err for x in ["broker_trades","PGRST205","404","protocol","missing"]):
-                print(f"      ⚠️  broker_trades skipped: {err[:80]}")
-            else:
-                raise
-        del trades
+            print(f"      ⚠️  broker_trades (second project) skipped: {e}")
+
 
         # Upsert this file's holdings data to Supabase right away
         syms = upsert_file_to_supabase(supabase, agg, broker_names, sec_names, fname)
@@ -1441,6 +1449,9 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
 const SUPABASE_URL = "{SUPABASE_URL}";
 const SUPABASE_ANON_KEY = "{SUPABASE_ANON_KEY}";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const TRADES_URL="https://fmseizcubbieodvfutby.supabase.co";
+const TRADES_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2VpemN1YmJpZW9kdmZ1dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTI1NTksImV4cCI6MjA5NDYyODU1OX0.1n3_mr-wUUoOpHF2pcz-K503dNcvuI842aW0fTYOQn0";
+const sbTrades=supabase.createClient(TRADES_URL,TRADES_ANON);
 
 let DAILY=[],CUMUL=[],FD=[],FC=[];
 let dCol='holding_qty',dAsc=false,cCol='net_holding',cAsc=false;
@@ -3330,7 +3341,7 @@ async function openSellerDrilldown(buyerBroker, buyerName){{
     let btRows=[], off2=0, lim2=1000;
     try{{
       while(true){{
-        const {{data,error}}=await sb.from('broker_trades').select(
+        const {{data,error}}=await sbTrades.from('broker_trades').select(
           'seller,qty,amount,date'
         ).eq('symbol',sym).eq('buyer',buyerBroker)
          .gte('date',dfrom).lte('date',dto)

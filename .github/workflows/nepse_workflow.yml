@@ -84,6 +84,7 @@ jobs:
           SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          TRADES_KEY:        ${{ secrets.TRADES_KEY }}
 
       # Only commit index.html — no JSON, no Excel files ever
       - name: Commit dashboard to repo
@@ -154,7 +155,6 @@ jobs:
               total = "—"
 
           total_fmt = "{:,}".format(total) if isinstance(total, int) else str(total)
-          total_fmt = "{:,}".format(total) if isinstance(total, int) else str(total)
           html = f"""<html><body style='background:#0a0f1e;color:#e2e8f0;font-family:sans-serif;padding:24px'>
           <div style='max-width:600px;margin:0 auto'>
             <h2 style='color:#00c8ff;font-family:monospace'>NEPSE Holdings — {TODAY}</h2>
@@ -188,7 +188,7 @@ jobs:
           with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
               s.login(SENDER, APP_PASSWORD)
               s.sendmail(SENDER, RECIPIENTS, msg.as_string())
-          print(f"✅ Email sent")
+          print(f"OK Email sent")
           EOF
         env:
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
@@ -203,7 +203,7 @@ jobs:
           import os, smtplib
           from email.mime.text import MIMEText
           from datetime import date
-          RECIPIENTS   = ["thebhuwan@gmail.com"]  # *** CHANGE THIS ***
+          RECIPIENTS   = ["thebhuwan@gmail.com"]
           SENDER       = os.environ.get("GMAIL_ADDRESS","")
           APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD","")
           if not SENDER: exit(0)
@@ -212,7 +212,7 @@ jobs:
           RUN_URL = f"https://github.com/{REPO}/actions/runs/{os.environ.get('GITHUB_RUN_ID','')}"
           msg = MIMEText(f"NEPSE workflow FAILED on {TODAY}.\n\nLogs: {RUN_URL}")
           msg["From"] = SENDER; msg["To"] = ", ".join(RECIPIENTS)
-          msg["Subject"] = f"⚠️ NEPSE Workflow Failed — {TODAY}"
+          msg["Subject"] = f"NEPSE Workflow Failed - {TODAY}"
           try:
               with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
                   s.login(SENDER, APP_PASSWORD)
