@@ -3546,39 +3546,20 @@ async function buildCommonStocks(sym, brokerNums, dfrom, dto){{
       return;
     }}
 
-    // ── Fetch total market volume for common symbols from daily_volume ────
+    // Build CS_DATA — sort by total net holding across ALL selected brokers
     const commonSymList = commonSyms.map(([s])=>s);
-    const totalVolMap={{}};
-    try{{
-      let dvRows=[], dvOff=0;
-      while(true){{
-        const {{data:dv}}=await sb.from('daily_volume')
-          .select('symbol,total_buy_qty')
-          .in('symbol',commonSymList)
-          .gte('date',dfrom).lte('date',dto)
-          .range(dvOff,dvOff+999);
-        if(!dv||!dv.length) break;
-        dv.forEach(r=>{{
-          if(!totalVolMap[r.symbol]) totalVolMap[r.symbol]=0;
-          totalVolMap[r.symbol]+=(r.total_buy_qty||0);
-        }});
-        if(dv.length<1000) break;
-        dvOff+=1000;
-      }}
-    }}catch(e){{console.warn('daily_volume fetch failed, using broker sum:',e);}}
-
-    // Build CS_DATA — totalBuy = market volume (from daily_volume) or broker sum fallback
     const allCsData = commonSyms.map(([sym, brkData])=>{{
-      const brokerBuy = Object.values(brkData).reduce((s,b)=>s+b.buy_qty,0);
-      const totalBuy  = totalVolMap[sym] || brokerBuy;
-      return {{ symbol:sym, totalBuy, brokerBuy, brkData }};
-    }}).sort((a,b)=>b.totalBuy-a.totalBuy);
-    // Top 10 by market volume
+      // Sum net holding across all selected brokers for this symbol
+      const totalHolding = Object.values(brkData).reduce((s,b)=>s+(b.holding_qty||0),0);
+      const totalBuy     = Object.values(brkData).reduce((s,b)=>s+(b.buy_qty||0),0);
+      return {{ symbol:sym, totalHolding, totalBuy, brkData }};
+    }}).sort((a,b)=>b.totalHolding-a.totalHolding);  // sort by combined holding
+    // Top 10 by combined holding across selected brokers
     CS_DATA = allCsData.slice(0,10);
     CS_DATA.forEach((r,i)=>r.rank=i+1);
 
     document.getElementById('cs-cnt').textContent=
-      'Top 10 of '+allCsData.length+' common symbols · '+brokerNums.length+' brokers · '+dfrom+' → '+dto;
+      'Top 10 of '+allCsData.length+' common symbols · sorted by net holding · '+brokerNums.length+' brokers · '+dfrom+' → '+dto;
     renderCsTable(CS_DATA, CS_BROKERS_META);
 
   }}catch(e){{
