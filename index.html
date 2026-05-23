@@ -2805,20 +2805,44 @@ async function buildCommonStocks(sym, brokerNums, dfrom, dto){
       return;
     }
 
-    // Build CS_DATA — sort by total net holding across ALL selected brokers
+    // Build CS_DATA — filter positive holdings only, sort by total net holding
     const commonSymList = commonSyms.map(([s])=>s);
+
+    // Fetch LTP for common symbols from daily_volume (latest date)
+    const ltpMap={};
+    try{
+      const {data:ltpData}=await sb.from('daily_volume')
+        .select('symbol,ltp,vwap')
+        .in('symbol',commonSymList)
+        .order('date',{ascending:false})
+        .limit(commonSymList.length*2);
+      if(ltpData) ltpData.forEach(r=>{
+        if(!ltpMap[r.symbol]) ltpMap[r.symbol]={ltp:r.ltp||0,vwap:r.vwap||0};
+      });
+    }catch(e){console.warn('LTP fetch failed:',e);}
+
     const allCsData = commonSyms.map(([sym, brkData])=>{
-      // Sum net holding across all selected brokers for this symbol
       const totalHolding = Object.values(brkData).reduce((s,b)=>s+(b.holding_qty||0),0);
       const totalBuy     = Object.values(brkData).reduce((s,b)=>s+(b.buy_qty||0),0);
-      return { symbol:sym, totalHolding, totalBuy, brkData };
-    }).sort((a,b)=>b.totalHolding-a.totalHolding);  // sort by combined holding
-    // Top 10 by combined holding across selected brokers
+      const ltp          = ltpMap[sym]?.ltp||0;
+      const vwap         = ltpMap[sym]?.vwap||0;
+      return { symbol:sym, totalHolding, totalBuy, ltp, vwap, brkData };
+    })
+    .filter(r=>r.totalHolding>0)          // only positive combined holdings
+    .sort((a,b)=>b.totalHolding-a.totalHolding);
+
+    if(!allCsData.length){
+      document.getElementById('cs-cnt').textContent='No common symbols with positive holdings';
+      document.getElementById('cs-table-wrap').innerHTML=
+        '<div class="empty">No common symbols where ALL selected brokers have positive net holdings.</div>';
+      return;
+    }
+
     CS_DATA = allCsData.slice(0,10);
     CS_DATA.forEach((r,i)=>r.rank=i+1);
 
     document.getElementById('cs-cnt').textContent=
-      'Top 10 of '+allCsData.length+' common symbols · sorted by net holding · '+brokerNums.length+' brokers · '+dfrom+' → '+dto;
+      'Top '+CS_DATA.length+' of '+allCsData.length+' common symbols · sorted by net holding · '+brokerNums.length+' brokers · '+dfrom+' → '+dto;
     renderCsTable(CS_DATA, CS_BROKERS_META);
 
   }catch(e){
@@ -2843,7 +2867,7 @@ function renderCsTable(data, brkMeta){
   const sorted=[...data].sort((a,b)=>{
     if(csSortCol==='rank')   return csSortAsc?a.rank-b.rank:b.rank-a.rank;
     if(csSortCol==='symbol') return csSortAsc?a.symbol.localeCompare(b.symbol):b.symbol.localeCompare(a.symbol);
-    return csSortAsc?a.totalBuy-b.totalBuy:b.totalBuy-a.totalBuy;
+    return csSortAsc?a.totalHolding-b.totalHolding:b.totalHolding-a.totalHolding;
   });
 
   const medals=['🥇','🥈','🥉'];
@@ -2895,7 +2919,7 @@ function renderCsTable(data, brkMeta){
     return `<tr>
       <td style="padding:4px 8px;font-size:11px;color:var(--muted)">${medals[rk-1]||rk}</td>
       <td class="sym" style="padding:4px 8px">${r.symbol}</td>
-      <td class="m pos" style="padding:4px 8px;font-size:11px">${fmt(r.totalBuy)}</td>
+      <td class="m" style="padding:4px 8px;font-size:11px;color:var(--amber)">${r.ltp ? 'Rs '+fmtf(r.ltp) : '—'}</td>
       ${cells}
     </tr>`;
   }).join('');
@@ -2909,7 +2933,7 @@ function renderCsTable(data, brkMeta){
         <tr>
           <th rowspan="2" onclick="sortCs('rank')" style="padding:6px 8px;min-width:36px"># ↕</th>
           <th rowspan="2" onclick="sortCs('symbol')" style="padding:6px 8px;min-width:60px">Symbol ↕</th>
-          <th rowspan="2" onclick="sortCs('totalBuy')" style="padding:6px 8px;min-width:80px">Market Vol ↕<div style="font-weight:400;font-size:9px;color:var(--muted)">Total buy all brokers</div></th>
+          <th rowspan="2" onclick="sortCs('ltp')" style="padding:6px 8px;min-width:80px">Market Vol ↕<div style="font-weight:400;font-size:9px;color:var(--muted)">Last traded price</div></th>
           ${thBrk}
         </tr>
         <tr>${thSub}</tr>
