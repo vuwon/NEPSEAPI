@@ -3399,31 +3399,52 @@ async function openSellerDrilldown(buyerBroker, buyerName){{
       SELLER_DATA.forEach((r,i)=>r.rank=i+1);
 
     }}else{{
-      // ── FALLBACK: all sellers of this symbol (approximate) ────────────────
+      // ── FALLBACK: estimate sellers proportionally per date ─────────
+      const buyerByDate={{}};
+      buyerRows.forEach(r=>buyerByDate[r.date]=(r.buy_qty||0));
+
       let allSellers=[], off3=0;
       while(true){{
         const {{data,error}}=await sb.from('holdings').select(
-          'broker,broker_name,total_sale_qty,bulk_sale_qty,bulk_sale_amt'
+          'date,broker,broker_name,bulk_sale_qty,bulk_sale_amt'
         ).eq('symbol',sym).gte('date',dfrom).lte('date',dto)
-         .gt('total_sale_qty',0).range(off3,off3+999);
+         .gt('bulk_sale_qty',0).range(off3,off3+999);
         if(error) break;
         allSellers.push(...(data||[]));
         if(!data||data.length<1000) break;
         off3+=1000;
       }}
+
+      // Get market volume per date for proportional estimation
+      const mktByDate={{}};
+      try{{
+        const {{data:dv2}}=await sb.from('daily_volume')
+          .select('date,total_buy_qty').eq('symbol',sym)
+          .gte('date',dfrom).lte('date',dto);
+        (dv2||[]).forEach(r=>mktByDate[r.date]=(r.total_buy_qty||0));
+      }}catch(e){{}}
+
+      // Estimate: each seller sold to this buyer proportionally
+      // (buyer_qty / total_market_qty) * seller_qty
       const sellerMap={{}};
       for(const r of allSellers){{
+        const mktVol   = mktByDate[r.date]||1;
+        const buyerQty = buyerByDate[r.date]||0;
+        if(buyerQty<=0) continue;
+        const ratio  = buyerQty/mktVol;
+        const estQty = Math.round((r.bulk_sale_qty||0)*ratio);
+        if(estQty<=0) continue;
         const b=r.broker;
-        if(!sellerMap[b]) sellerMap[b]={{seller:b,name:r.broker_name||'',qty:0,bulk_qty:0,bulk_amt:0}};
-        sellerMap[b].qty      +=(r.total_sale_qty||0);
-        sellerMap[b].bulk_qty +=(r.bulk_sale_qty||0);
-        sellerMap[b].bulk_amt +=(r.bulk_sale_amt||0);
+        if(!sellerMap[b]) sellerMap[b]={{seller:b,name:r.broker_name||'',qty:0,bulk_amt:0}};
+        sellerMap[b].qty     += estQty;
+        sellerMap[b].bulk_amt+= Math.round((r.bulk_sale_amt||0)*ratio);
       }}
       SELLER_DATA=Object.values(sellerMap).map(s=>{{
-        const avgRate  = s.bulk_qty>0 ? Math.round((s.bulk_amt/s.bulk_qty)*100)/100 : 0;
+        const avgRate  = s.qty>0 ? Math.round((s.bulk_amt/s.qty)*100)/100 : 0;
+        const buyerPct = totalBuyerQty>0 ? Math.round((s.qty/totalBuyerQty)*10000)/100 : 0;
         const mktPct   = totalMarketQty>0 ? Math.round((s.qty/totalMarketQty)*10000)/100 : 0;
         return {{seller:s.seller,name:s.name,qty:s.qty,avg_rate:avgRate,
-                 buyer_pct:null,day_pct:mktPct,rank:0}};
+                 buyer_pct:buyerPct,day_pct:mktPct,rank:0}};
       }}).sort((a,b)=>b.qty-a.qty);
       SELLER_DATA.forEach((r,i)=>r.rank=i+1);
     }}
