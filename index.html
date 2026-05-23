@@ -2842,13 +2842,16 @@ async function buildCommonStocks(sym, brokerNums, dfrom, dto){
       return { symbol:sym, totalHolding, totalBuy, ltp:mkt.ltp, vwap:mkt.vwap,
                mktVol:mkt.mktVol, holdPct, brkData };
     })
-    .filter(r=>r.totalHolding>0)           // only positive combined holdings
+    .filter(r=>{
+      // ALL selected brokers must have positive holding for this script
+      return brokerNums.every(b=> (r.brkData[b]?.holding_qty||0) > 0);
+    })
     .sort((a,b)=>b.totalHolding-a.totalHolding);
 
     if(!allCsData.length){
-      document.getElementById('cs-cnt').textContent='No common symbols with positive holdings';
+      document.getElementById('cs-cnt').textContent='No common symbols with positive holdings for all brokers';
       document.getElementById('cs-table-wrap').innerHTML=
-        '<div class="empty">No common symbols where ALL selected brokers have positive net holdings.</div>';
+        '<div class="empty">No scripts where ALL selected brokers have positive holdings. Try a wider date range.</div>';
       return;
     }
 
@@ -2908,7 +2911,7 @@ function renderCsTable(data, brkMeta){
     `<th style="border-left:2px solid var(--border2);font-size:9px">Buy<br>Rate</th>`+
     `<th style="font-size:9px">Sell<br>Rate</th>`+
     `<th style="font-size:9px">IPO</th>`+
-    `<th style="font-size:9px">Hold<br>Rate</th>`
+    `<th style="font-size:9px">Hold<br>Hold%</th>`
   ).join('');
 
   // Rows
@@ -2920,6 +2923,9 @@ function renderCsTable(data, brkMeta){
       const sellRate = d.bulk_qty>0  ? Math.round((d.bulk_amt/d.bulk_qty)*100)/100 : 0;
       const holdRate = d.holding_qty>0 ? Math.round(((d.buy_amt-d.bulk_amt)/d.holding_qty)*100)/100 : 0;
       const nhcls    = (d.holding_qty||0)>=0?'pos':'neg';
+      // Broker holding % = broker holding / market volume * 100
+      const bHoldPct = r.mktVol>0 ? ((d.holding_qty||0)/r.mktVol*100).toFixed(2) : '—';
+      const pctColor = parseFloat(bHoldPct)>=10?'var(--cyan)':parseFloat(bHoldPct)>=5?'var(--amber)':'var(--green)';
       return `<td style="border-left:2px solid var(--border2);padding:4px 6px">
           <div class="m pos" style="font-size:11px">${fmt(d.buy_qty||0)}</div>
           <div style="color:var(--amber);font-size:9px">Rs ${fmtf(buyRate)}</div>
@@ -2933,7 +2939,7 @@ function renderCsTable(data, brkMeta){
         </td>
         <td style="padding:4px 6px">
           <div class="m ${nhcls}" style="font-size:11px">${fmt(d.holding_qty||0)}</div>
-          <div style="color:var(--amber);font-size:9px">Rs ${fmtf(holdRate)}</div>
+          <div style="color:${pctColor};font-size:9px;font-weight:600">${bHoldPct}%</div>
         </td>`;
     }).join('');
     return `<tr>
