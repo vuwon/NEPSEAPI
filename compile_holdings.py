@@ -1450,7 +1450,7 @@ const SUPABASE_URL = "{SUPABASE_URL}";
 const SUPABASE_ANON_KEY = "{SUPABASE_ANON_KEY}";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const TRADES_URL="https://fmseizcubbieodvfutby.supabase.co";
-const TRADES_ANON="";
+const TRADES_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtc2VpemN1YmJpZW9kdmZ1dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTI1NTksImV4cCI6MjA5NDYyODU1OX0.1n3_mr-wUUoOpHF2pcz-K503dNcvuI842aW0fTYOQn0";
 const sbTrades=supabase.createClient(TRADES_URL,TRADES_ANON);
 
 let DAILY=[],CUMUL=[],FD=[],FC=[];
