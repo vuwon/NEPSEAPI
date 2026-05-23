@@ -2805,30 +2805,44 @@ async function buildCommonStocks(sym, brokerNums, dfrom, dto){
       return;
     }
 
-    // Build CS_DATA — filter positive holdings only, sort by total net holding
+    // Build CS_DATA — fetch LTP + market volume, filter positive, sort by holding
     const commonSymList = commonSyms.map(([s])=>s);
 
-    // Fetch LTP for common symbols from daily_volume (latest date)
-    const ltpMap={};
+    // Fetch LTP + total market volume for common symbols
+    const mktMap={};
     try{
-      const {data:ltpData}=await sb.from('daily_volume')
-        .select('symbol,ltp,vwap')
-        .in('symbol',commonSymList)
-        .order('date',{ascending:false})
-        .limit(commonSymList.length*2);
-      if(ltpData) ltpData.forEach(r=>{
-        if(!ltpMap[r.symbol]) ltpMap[r.symbol]={ltp:r.ltp||0,vwap:r.vwap||0};
-      });
-    }catch(e){console.warn('LTP fetch failed:',e);}
+      let dvRows=[], dvOff=0;
+      while(true){
+        const {data:dv}=await sb.from('daily_volume')
+          .select('symbol,ltp,vwap,total_buy_qty,date')
+          .in('symbol',commonSymList)
+          .gte('date',dfrom).lte('date',dto)
+          .range(dvOff,dvOff+999);
+        if(!dv||!dv.length) break;
+        dv.forEach(r=>{
+          if(!mktMap[r.symbol]) mktMap[r.symbol]={ltp:0,vwap:0,mktVol:0,latestDate:''};
+          mktMap[r.symbol].mktVol += (r.total_buy_qty||0);
+          if(r.date > mktMap[r.symbol].latestDate){
+            mktMap[r.symbol].ltp  = r.ltp||0;
+            mktMap[r.symbol].vwap = r.vwap||0;
+            mktMap[r.symbol].latestDate = r.date;
+          }
+        });
+        if(dv.length<1000) break;
+        dvOff+=1000;
+      }
+    }catch(e){console.warn('daily_volume fetch failed:',e);}
 
     const allCsData = commonSyms.map(([sym, brkData])=>{
       const totalHolding = Object.values(brkData).reduce((s,b)=>s+(b.holding_qty||0),0);
       const totalBuy     = Object.values(brkData).reduce((s,b)=>s+(b.buy_qty||0),0);
-      const ltp          = ltpMap[sym]?.ltp||0;
-      const vwap         = ltpMap[sym]?.vwap||0;
-      return { symbol:sym, totalHolding, totalBuy, ltp, vwap, brkData };
+      const mkt          = mktMap[sym]||{ltp:0,vwap:0,mktVol:0};
+      // Holding % = combined holding / market volume * 100
+      const holdPct      = mkt.mktVol>0 ? Math.round((Math.abs(totalHolding)/mkt.mktVol)*10000)/100 : 0;
+      return { symbol:sym, totalHolding, totalBuy, ltp:mkt.ltp, vwap:mkt.vwap,
+               mktVol:mkt.mktVol, holdPct, brkData };
     })
-    .filter(r=>r.totalHolding>0)          // only positive combined holdings
+    .filter(r=>r.totalHolding>0)           // only positive combined holdings
     .sort((a,b)=>b.totalHolding-a.totalHolding);
 
     if(!allCsData.length){
@@ -2842,7 +2856,8 @@ async function buildCommonStocks(sym, brokerNums, dfrom, dto){
     CS_DATA.forEach((r,i)=>r.rank=i+1);
 
     document.getElementById('cs-cnt').textContent=
-      'Top '+CS_DATA.length+' of '+allCsData.length+' common symbols · sorted by net holding · '+brokerNums.length+' brokers · '+dfrom+' → '+dto;
+      'Top '+CS_DATA.length+' of '+allCsData.length+' common symbols · sorted by net holding · '+
+      brokerNums.length+' brokers · '+dfrom+' → '+dto;
     renderCsTable(CS_DATA, CS_BROKERS_META);
 
   }catch(e){
@@ -2867,7 +2882,12 @@ function renderCsTable(data, brkMeta){
   const sorted=[...data].sort((a,b)=>{
     if(csSortCol==='rank')   return csSortAsc?a.rank-b.rank:b.rank-a.rank;
     if(csSortCol==='symbol') return csSortAsc?a.symbol.localeCompare(b.symbol):b.symbol.localeCompare(a.symbol);
+    return (()=>{
+    if(csSortCol==='ltp')     return csSortAsc?a.ltp-b.ltp:b.ltp-a.ltp;
+    if(csSortCol==='mktVol')  return csSortAsc?a.mktVol-b.mktVol:b.mktVol-a.mktVol;
+    if(csSortCol==='holdPct') return csSortAsc?a.holdPct-b.holdPct:b.holdPct-a.holdPct;
     return csSortAsc?a.totalHolding-b.totalHolding:b.totalHolding-a.totalHolding;
+  })();
   });
 
   const medals=['🥇','🥈','🥉'];
@@ -2920,12 +2940,14 @@ function renderCsTable(data, brkMeta){
       <td style="padding:4px 8px;font-size:11px;color:var(--muted)">${medals[rk-1]||rk}</td>
       <td class="sym" style="padding:4px 8px">${r.symbol}</td>
       <td class="m" style="padding:4px 8px;font-size:11px;color:var(--amber)">${r.ltp ? 'Rs '+fmtf(r.ltp) : '—'}</td>
+      <td class="m" style="padding:4px 8px;font-size:11px;color:var(--muted)">${fmt(r.mktVol||0)}</td>
+      <td class="m" style="padding:4px 8px;font-size:11px;color:${r.holdPct>=10?'var(--cyan)':r.holdPct>=5?'var(--amber)':'var(--green)'}">${r.holdPct.toFixed(2)}%</td>
       ${cells}
     </tr>`;
   }).join('');
 
   // Compute approx width: 120px fixed + 160px per broker
-  const minW = 120 + nBrk * 180;
+  const minW = 280 + nBrk * 180;
 
   document.getElementById('cs-table-wrap').innerHTML=
     `<table style="min-width:${minW}px;width:100%;border-collapse:collapse">
@@ -2933,7 +2955,9 @@ function renderCsTable(data, brkMeta){
         <tr>
           <th rowspan="2" onclick="sortCs('rank')" style="padding:6px 8px;min-width:36px"># ↕</th>
           <th rowspan="2" onclick="sortCs('symbol')" style="padding:6px 8px;min-width:60px">Symbol ↕</th>
-          <th rowspan="2" onclick="sortCs('ltp')" style="padding:6px 8px;min-width:80px">Market Vol ↕<div style="font-weight:400;font-size:9px;color:var(--muted)">Last traded price</div></th>
+          <th rowspan="2" onclick="sortCs('ltp')" style="padding:6px 8px;min-width:70px">LTP ↕<div style="font-weight:400;font-size:9px;color:var(--muted)">Last price</div></th>
+          <th rowspan="2" onclick="sortCs('mktVol')" style="padding:6px 8px;min-width:80px">Mkt Vol ↕<div style="font-weight:400;font-size:9px;color:var(--muted)">Period total</div></th>
+          <th rowspan="2" onclick="sortCs('holdPct')" style="padding:6px 8px;min-width:70px">Hold% ↕<div style="font-weight:400;font-size:9px;color:var(--muted)">vs mkt vol</div></th>
           ${thBrk}
         </tr>
         <tr>${thSub}</tr>
