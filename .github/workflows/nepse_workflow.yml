@@ -3,9 +3,8 @@ name: NEPSE Daily Fetch + Dashboard
 on:
   schedule:
     - cron: '30 9 * * 1,2,3,4,5'
-    # 3:15 PM Nepal Time (NPT = UTC+5:45) = 09:30 UTC
-    # NEPSE now trades Monday to Friday
   workflow_dispatch:
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -15,12 +14,15 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write
+      pages: write
+      id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,7 +32,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
           pip install pandas openpyxl httpx
         timeout-minutes: 5
 
@@ -40,23 +41,10 @@ jobs:
           python - <<'EOF'
           import datetime, os
           HOLIDAYS = [
-              # 2026 Nepal Public Holidays — update annually
-              "2026-01-14",  # Maghe Sankranti
-              "2026-02-19",  # Democracy Day
-              "2026-03-28",  # Ghode Jatra
-              "2026-04-14",  # New Year (Baisakh 1)
-              "2026-05-01",  # Labour Day
-              "2026-05-12",  # Buddha Jayanti
-              "2026-09-17",  # Indra Jatra
-              "2026-10-02",  # Ghatasthapana
-              "2026-10-20",  # Phulpati
-              "2026-10-21",  # Maha Ashtami
-              "2026-10-22",  # Maha Nawami
-              "2026-10-23",  # Vijaya Dashami
-              "2026-11-15",  # Laxmi Puja
-              "2026-11-16",  # Govardhan Puja
-              "2026-11-17",  # Bhai Tika
-              "2026-12-29",  # Constitution Day
+              "2026-01-14","2026-02-19","2026-03-28","2026-04-14",
+              "2026-05-01","2026-05-12","2026-09-17","2026-10-02",
+              "2026-10-20","2026-10-21","2026-10-22","2026-10-23",
+              "2026-11-15","2026-11-16","2026-11-17","2026-12-29",
           ]
           today = datetime.date.today().strftime("%Y-%m-%d")
           is_holiday = today in HOLIDAYS
@@ -86,7 +74,6 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           TRADES_KEY:        ${{ secrets.TRADES_KEY }}
 
-      # Only commit index.html — no JSON, no Excel files ever
       - name: Commit dashboard to repo
         if: steps.holiday.outputs.is_holiday == 'false'
         run: |
@@ -106,12 +93,12 @@ jobs:
         if: steps.holiday.outputs.is_holiday == 'false'
         run: |
           python - <<'EOF'
-          import os, json, smtplib, httpx
+          import os, smtplib, httpx
           from email.mime.multipart import MIMEMultipart
           from email.mime.text import MIMEText
           from datetime import date
 
-          RECIPIENTS   = ["thebhuwan@gmail.com", "cmcchovar@gmail.com", "rajkarnikarm@gmail.com"]
+          RECIPIENTS   = ["thebhuwan@gmail.com", "chakratirthasubarna@gmail.com", "rajkarnikarm@gmail.com"]
           SENDER       = os.environ["GMAIL_ADDRESS"]
           APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
           TODAY        = date.today().strftime("%Y-%m-%d")
@@ -123,47 +110,38 @@ jobs:
           HEADERS      = {"apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY}
 
           try:
-              r = httpx.get(
-                  SB_URL + "/rest/v1/holdings",
+              r = httpx.get(SB_URL + "/rest/v1/holdings",
                   headers=HEADERS,
                   params={"date": "eq." + TODAY, "order": "holding_qty.desc", "limit": "10"},
-                  timeout=30
-              )
+                  timeout=30)
               rows = r.json() if r.status_code == 200 else []
-              count_r = httpx.get(
-                  SB_URL + "/rest/v1/holdings",
+              count_r = httpx.get(SB_URL + "/rest/v1/holdings",
                   headers={**HEADERS, "Prefer": "count=exact"},
                   params={"date": "eq." + TODAY, "select": "id"},
-                  timeout=30
-              )
+                  timeout=30)
               total = int(count_r.headers.get("content-range","0/0").split("/")[-1] or 0)
-              unique_sym = len(set(r.get("symbol","") for r in rows))
               table_rows = ""
               for r in rows:
                   nh = int(r.get("holding_qty",0))
-                  nh_fmt = "{:,}".format(nh)
                   color = "#00e5a0" if nh>=0 else "#ff4d6a"
                   table_rows += f"""<tr>
                     <td style='padding:8px;border:1px solid #1f2d45;font-family:monospace;color:#00c8ff'>{r.get('symbol','')}</td>
-                    <td style='padding:8px;border:1px solid #1f2d45;text-align:center;font-family:monospace'>{r.get('broker','')}</td>
+                    <td style='padding:8px;border:1px solid #1f2d45;text-align:center'>{r.get('broker','')}</td>
                     <td style='padding:8px;border:1px solid #1f2d45;font-size:12px;color:#64748b'>{r.get('broker_name','')}</td>
-                    <td style='padding:8px;border:1px solid #1f2d45;text-align:right;color:{color};font-family:monospace'>{nh_fmt}</td>
+                    <td style='padding:8px;border:1px solid #1f2d45;text-align:right;color:{color}'>{nh:,}</td>
                   </tr>"""
-              total = int(count_r.headers.get("content-range","0/0").split("/")[-1] or 0)
           except Exception as e:
               table_rows = f"<tr><td colspan='4'>Data unavailable: {e}</td></tr>"
               total = "—"
 
-          total_fmt = "{:,}".format(total) if isinstance(total, int) else str(total)
+          total_fmt = f"{total:,}" if isinstance(total, int) else str(total)
           html = f"""<html><body style='background:#0a0f1e;color:#e2e8f0;font-family:sans-serif;padding:24px'>
           <div style='max-width:600px;margin:0 auto'>
-            <h2 style='color:#00c8ff;font-family:monospace'>NEPSE Holdings — {TODAY}</h2>
-            <p style='color:#64748b;font-size:13px;margin-bottom:20px'>Automated daily floorsheet analysis</p>
+            <h2 style='color:#00c8ff'>NEPSE Holdings — {TODAY}</h2>
             <div style='background:#111827;border:1px solid #1f2d45;border-radius:8px;padding:14px 18px;margin-bottom:20px'>
-              <div style='color:#64748b;font-size:11px;text-transform:uppercase'>Today Positions</div>
+              <div style='color:#64748b;font-size:11px'>Today Positions</div>
               <div style='color:#00c8ff;font-size:22px;font-family:monospace'>{total_fmt}</div>
             </div>
-            <h3 style='color:#cdd9e5;margin-bottom:10px;font-size:13px;text-transform:uppercase'>Top 10 Holdings Today</h3>
             <table style='width:100%;border-collapse:collapse;background:#111827'>
               <thead><tr style='background:#1a2235'>
                 <th style='padding:9px;border:1px solid #1f2d45;text-align:left;color:#64748b;font-size:11px'>SYMBOL</th>
@@ -174,21 +152,22 @@ jobs:
               <tbody>{table_rows}</tbody>
             </table>
             <div style='margin-top:20px'>
-              <a href='{PAGES_URL}' style='background:linear-gradient(135deg,#0090c8,#a855f7);color:#fff;padding:10px 20px;border-radius:7px;text-decoration:none;font-size:13px'>
-                View Full Dashboard →
+              <a href='{PAGES_URL}' style='background:linear-gradient(135deg,#0090c8,#a855f7);color:#fff;padding:10px 20px;border-radius:7px;text-decoration:none'>
+                View Full Dashboard
               </a>
             </div>
-            <p style='margin-top:16px;color:#4a6480;font-size:11px'>Run log: <a href='{RUN_URL}' style='color:#00c8ff'>{RUN_URL}</a></p>
+            <p style='margin-top:16px;color:#4a6480;font-size:11px'>Run: <a href='{RUN_URL}' style='color:#00c8ff'>{RUN_URL}</a></p>
           </div></body></html>"""
 
           msg = MIMEMultipart("alternative")
-          msg["From"] = SENDER; msg["To"] = ", ".join(RECIPIENTS)
+          msg["From"] = SENDER
+          msg["To"] = ", ".join(RECIPIENTS)
           msg["Subject"] = f"NEPSE Holdings Report — {TODAY}"
           msg.attach(MIMEText(html, "html"))
           with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
               s.login(SENDER, APP_PASSWORD)
               s.sendmail(SENDER, RECIPIENTS, msg.as_string())
-          print(f"OK Email sent")
+          print("Email sent")
           EOF
         env:
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
@@ -203,7 +182,6 @@ jobs:
           import os, smtplib
           from email.mime.text import MIMEText
           from datetime import date
-          RECIPIENTS   = ["thebhuwan@gmail.com"]
           SENDER       = os.environ.get("GMAIL_ADDRESS","")
           APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD","")
           if not SENDER: exit(0)
@@ -211,12 +189,13 @@ jobs:
           REPO    = os.environ.get("GITHUB_REPOSITORY","")
           RUN_URL = f"https://github.com/{REPO}/actions/runs/{os.environ.get('GITHUB_RUN_ID','')}"
           msg = MIMEText(f"NEPSE workflow FAILED on {TODAY}.\n\nLogs: {RUN_URL}")
-          msg["From"] = SENDER; msg["To"] = ", ".join(RECIPIENTS)
+          msg["From"] = SENDER
+          msg["To"]   = SENDER
           msg["Subject"] = f"NEPSE Workflow Failed - {TODAY}"
           try:
               with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
                   s.login(SENDER, APP_PASSWORD)
-                  s.sendmail(SENDER, RECIPIENTS, msg.as_string())
+                  s.sendmail(SENDER, [SENDER], msg.as_string())
           except Exception as e:
               print(f"Could not send: {e}")
           EOF
