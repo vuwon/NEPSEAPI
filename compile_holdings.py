@@ -3365,7 +3365,7 @@ async function openSellerDrilldown(buyerBroker, buyerName){{
     try{{
       while(true){{
         const {{data,error}}=await sbTrades.from('broker_trades').select(
-          'seller,qty,amount,date'
+          'seller,qty,date'
         ).eq('symbol',sym).eq('buyer',buyerBroker)
          .gte('date',dfrom).lte('date',dto)
          .range(off2,off2+lim2-1);
@@ -3404,13 +3404,12 @@ async function openSellerDrilldown(buyerBroker, buyerName){{
       const sellerMap={{}};
       for(const r of btRows){{
         const s=r.seller;
-        if(!sellerMap[s]) sellerMap[s]={{seller:s,qty:0,amount:0}};
-        sellerMap[s].qty    +=(r.qty||0);
-        sellerMap[s].amount +=(r.amount||0);
+        if(!sellerMap[s]) sellerMap[s]={{seller:s,qty:0}};
+        sellerMap[s].qty +=(r.qty||0);
       }}
 
       SELLER_DATA=Object.values(sellerMap).map(s=>{{
-        const avgRate  = s.qty>0 ? Math.round((s.amount/s.qty)*100)/100 : 0;
+        const avgRate  = 0;  // rate not stored in broker_trades
         const buyerPct = totalBuyerQty>0 ? Math.round((s.qty/totalBuyerQty)*10000)/100 : 0;
         const mktPct   = totalMarketQty>0 ? Math.round((s.qty/totalMarketQty)*10000)/100 : 0;
         return {{
@@ -3536,17 +3535,38 @@ async function buildCommonStocks(sym, brokerNums, dfrom, dto){{
   document.getElementById('cs-table-wrap').innerHTML=
     '<div class="loading"><div class="spinner"></div>Loading…</div>';
   try{{
-    // Fetch holdings for ALL selected brokers in date range
+    // Use cumulative table for all-time, holdings for date-range
+    const useDateRange = !!(dfrom && dto);
     let all=[], off=0, lim=1000;
-    while(true){{
-      const {{data,error}}=await sb.from('holdings').select(
-        'symbol,broker,broker_name,buy_qty,buy_amt,total_sale_qty,ipo_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty'
-      ).in('broker',brokerNums).gte('date',dfrom).lte('date',dto)
-       .range(off,off+lim-1);
-      if(error) throw error;
-      all.push(...(data||[]));
-      if(!data||data.length<lim) break;
-      off+=lim;
+    if(useDateRange){{
+      // Date range — paginate holdings with safety limit
+      let pages=0;
+      while(pages<20){{
+        const {{data,error}}=await sb.from('holdings').select(
+          'symbol,broker,broker_name,buy_qty,buy_amt,total_sale_qty,ipo_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty'
+        ).in('broker',brokerNums).gte('date',dfrom).lte('date',dto)
+         .range(off,off+lim-1);
+        if(error){{console.warn('Common stocks fetch error:',error);break;}}
+        all.push(...(data||[]));
+        if(!data||data.length<lim) break;
+        off+=lim; pages++;
+      }}
+    }}else{{
+      // No date range — use cumulative (instant, pre-aggregated)
+      while(true){{
+        const {{data,error}}=await sb.from('cumulative').select(
+          'symbol,broker,broker_name,total_buy_qty,total_buy_amt,total_sale_qty,total_ipo_qty,total_bulk_qty,total_bulk_amt,net_holding'
+        ).in('broker',brokerNums).range(off,off+lim-1);
+        if(error||!data||!data.length) break;
+        // Map cumulative columns to holdings column names
+        all.push(...data.map(r=>({{symbol:r.symbol,broker:r.broker,broker_name:r.broker_name,
+          buy_qty:r.total_buy_qty||0, buy_amt:r.total_buy_amt||0,
+          total_sale_qty:r.total_sale_qty||0, ipo_sale_qty:r.total_ipo_qty||0,
+          bulk_sale_qty:r.total_bulk_qty||0, bulk_sale_amt:r.total_bulk_amt||0,
+          holding_qty:r.net_holding||0}})));
+        if(data.length<lim) break;
+        off+=lim;
+      }}
     }}
     if(!all.length){{
       document.getElementById('cs-cnt').textContent='No data';
