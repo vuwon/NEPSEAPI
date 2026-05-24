@@ -3210,11 +3210,12 @@ async function buildTopBrokers(sym, dfrom, dto){{
       if(dv) marketVol=dv.reduce((s,r)=>s+(r.total_buy_qty||0),0);
     }}catch(e){{}}
 
+    const totalHoldingAll = Object.values(bmap).reduce((s,b)=>s+(b.holding_qty>0?b.holding_qty:0),0);
     const allBrkData = Object.values(bmap).map((b,i)=>{{
       const buyRate  = b.buy_qty>0   ? Math.round((b.buy_amt/b.buy_qty)*100)/100        : 0;
       const sellRate = b.bulk_qty>0  ? Math.round((b.bulk_amt/b.bulk_qty)*100)/100      : 0;
       const holdRate = b.holding_qty>0 ? Math.round(((b.buy_amt-b.bulk_amt)/b.holding_qty)*100)/100 : 0;
-      const mktPct   = marketVol>0   ? Math.round((b.holding_qty/marketVol)*10000)/100      : 0;
+      const mktPct   = totalHoldingAll>0 ? Math.round((b.holding_qty/totalHoldingAll)*10000)/100 : 0;
       return {{
         broker:b.broker, name:b.name,
         buy_qty:b.buy_qty, avg_buy_rate:buyRate,
