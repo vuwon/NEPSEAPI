@@ -3164,13 +3164,17 @@ async function buildTopBrokers(sym, dfrom, dto){{
   document.getElementById('tb-tbody').innerHTML=
     '<tr><td colspan="8"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
   try{{
+    console.log('Top buyers query:', sym, dfrom, dto);
     // Fetch all broker rows for this symbol in date range
     let all=[], off=0, lim=1000;
     while(true){{
-      const {{data,error}}=await sb.from('holdings').select(
+      let tbq=sb.from('holdings').select(
         'broker,broker_name,buy_qty,buy_amt,total_sale_qty,ipo_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty'
-      ).eq('symbol',sym).gte('date',dfrom).lte('date',dto)
-       .range(off,off+lim-1);
+      ).eq('symbol',sym);
+      if(dfrom) tbq=tbq.gte('date',dfrom);
+      if(dto)   tbq=tbq.lte('date',dto);
+      tbq=tbq.range(off,off+lim-1);
+      const {{data,error}}=await tbq;
       if(error) throw error;
       all.push(...(data||[]));
       if(!data||data.length<lim) break;
