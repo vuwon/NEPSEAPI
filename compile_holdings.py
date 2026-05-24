@@ -3165,44 +3165,62 @@ async function buildTopBrokers(sym, dfrom, dto){{
     '<tr><td colspan="8"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
   try{{
     console.log('Top buyers query:', sym, dfrom, dto);
-    // Fetch all broker rows for this symbol in date range
-    let all=[], off=0, lim=1000;
-    while(true){{
-      let tbq=sb.from('holdings').select(
-        'broker,broker_name,buy_qty,buy_amt,total_sale_qty,ipo_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty'
-      ).eq('symbol',sym);
-      if(dfrom) tbq=tbq.gte('date',dfrom);
-      if(dto)   tbq=tbq.lte('date',dto);
-      tbq=tbq.range(off,off+lim-1);
-      const {{data,error}}=await tbq;
-      if(error) throw error;
-      all.push(...(data||[]));
-      if(!data||data.length<lim) break;
-      off+=lim;
+    // Use cumulative table for all-time, or aggregate holdings for date range
+    const useDateRange = !!(dfrom && dto);
+    let bmap={{}};
+
+    if(useDateRange){{
+      // Fetch from holdings with date filter — paginate carefully
+      let all=[], off=0, lim=1000, pages=0;
+      while(pages<30){{  // max 30,000 rows safety limit
+        let tbq=sb.from('holdings').select(
+          'broker,broker_name,buy_qty,buy_amt,total_sale_qty,ipo_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty'
+        ).eq('symbol',sym).gte('date',dfrom).lte('date',dto)
+         .range(off,off+lim-1);
+        const {{data,error}}=await tbq;
+        if(error){{ console.warn('Top buyers fetch error at offset',off,error); break; }}
+        all.push(...(data||[]));
+        if(!data||data.length<lim) break;
+        off+=lim; pages++;
+      }}
+      for(const r of all){{
+        const b=r.broker;
+        if(!bmap[b]) bmap[b]={{broker:b,name:r.broker_name||'',
+          buy_qty:0,buy_amt:0,sale_qty:0,ipo_qty:0,bulk_qty:0,bulk_amt:0,holding_qty:0}};
+        bmap[b].buy_qty    +=(r.buy_qty||0);
+        bmap[b].buy_amt    +=(r.buy_amt||0);
+        bmap[b].sale_qty   +=(r.total_sale_qty||0);
+        bmap[b].ipo_qty    +=(r.ipo_sale_qty||0);
+        bmap[b].bulk_qty   +=(r.bulk_sale_qty||0);
+        bmap[b].bulk_amt   +=(r.bulk_sale_amt||0);
+        bmap[b].holding_qty+=(r.holding_qty||0);
+      }}
+    }} else {{
+      // No date range — use cumulative table (fast, no pagination needed)
+      let off=0, lim=1000;
+      while(true){{
+        const {{data,error}}=await sb.from('cumulative').select(
+          'broker,broker_name,total_buy_qty,total_buy_amt,total_sale_qty,total_ipo_qty,total_bulk_qty,total_bulk_amt,net_holding,avg_rate'
+        ).eq('symbol',sym).range(off,off+lim-1);
+        if(error||!data||!data.length) break;
+        for(const r of data){{
+          const b=r.broker;
+          bmap[b]={{broker:b,name:r.broker_name||'',
+            buy_qty:r.total_buy_qty||0, buy_amt:r.total_buy_amt||0,
+            sale_qty:r.total_sale_qty||0, ipo_qty:r.total_ipo_qty||0,
+            bulk_qty:r.total_bulk_qty||0, bulk_amt:r.total_bulk_amt||0,
+            holding_qty:r.net_holding||0}};
+        }}
+        if(data.length<lim) break;
+        off+=lim;
+      }}
     }}
-    if(!all.length){{
+
+    if(!Object.keys(bmap).length){{
       document.getElementById('tb-cnt').textContent='No data';
       document.getElementById('tb-tbody').innerHTML=
         '<tr><td colspan="8"><div class="empty">No data for '+sym+' in this date range.</div></td></tr>';
       return;
-    }}
-
-    // Aggregate per broker across all dates in range
-    const bmap={{}};
-    for(const r of all){{
-      const b=r.broker;
-      if(!bmap[b]) bmap[b]={{
-        broker:b, name:r.broker_name||'',
-        buy_qty:0,buy_amt:0,sale_qty:0,
-        ipo_qty:0,bulk_qty:0,bulk_amt:0,holding_qty:0
-      }};
-      bmap[b].buy_qty    +=(r.buy_qty||0);
-      bmap[b].buy_amt    +=(r.buy_amt||0);
-      bmap[b].sale_qty   +=(r.total_sale_qty||0);
-      bmap[b].ipo_qty    +=(r.ipo_sale_qty||0);
-      bmap[b].bulk_qty   +=(r.bulk_sale_qty||0);
-      bmap[b].bulk_amt   +=(r.bulk_sale_amt||0);
-      bmap[b].holding_qty+=(r.holding_qty||0);
     }}
 
     // Fetch total market volume for market share %
