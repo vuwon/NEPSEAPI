@@ -1317,7 +1317,7 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
           <th onclick="sortTb('ipo_qty')">IPO Sale ↕</th>
           <th onclick="sortTb('bulk_qty')">Bulk Sale ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
           <th onclick="sortTb('holding_qty')">Net Holding ↕<br><span style="font-weight:400;font-size:10px;color:var(--muted)">Avg Rate</span></th>
-          <th onclick="sortTb('market_pct')">Mkt Share ↕</th>
+          <th onclick="sortTb('market_pct')">Hold % ↕</th>
         </tr></thead>
         <tbody id="tb-tbody">
           <tr><td colspan="8"><div class="empty">Select a symbol, set date range and click Compare.</div></td></tr>
@@ -3214,7 +3214,7 @@ async function buildTopBrokers(sym, dfrom, dto){{
       const buyRate  = b.buy_qty>0   ? Math.round((b.buy_amt/b.buy_qty)*100)/100        : 0;
       const sellRate = b.bulk_qty>0  ? Math.round((b.bulk_amt/b.bulk_qty)*100)/100      : 0;
       const holdRate = b.holding_qty>0 ? Math.round(((b.buy_amt-b.bulk_amt)/b.holding_qty)*100)/100 : 0;
-      const mktPct   = marketVol>0   ? Math.round((b.buy_qty/marketVol)*10000)/100      : 0;
+      const mktPct   = marketVol>0   ? Math.round((b.holding_qty/marketVol)*10000)/100      : 0;
       return {{
         broker:b.broker, name:b.name,
         buy_qty:b.buy_qty, avg_buy_rate:buyRate,
@@ -3277,7 +3277,7 @@ function renderTbTable(data){{
       +'<td><span class="ipo">'+fmt(r.ipo_qty)+'</span></td>'
       +'<td>'+qr(r.bulk_qty,r.avg_sell_rate,'')+'</td>'
       +'<td>'+qr(r.holding_qty,r.avg_hold_rate,nhcls)+'</td>'
-      +'<td class="m" style="color:'+(r.market_pct>5?'var(--cyan)':r.market_pct>1?'var(--amber)':'var(--muted)')+'">'+r.market_pct.toFixed(2)+'%</td>'
+      +'<td class="m" style="color:'+(r.market_pct>=10?'var(--cyan)':r.market_pct>=5?'var(--amber)':'var(--muted)')+'">'+r.market_pct.toFixed(2)+'%</td>'
       +'</tr>';
   }}).join('');
 }}
