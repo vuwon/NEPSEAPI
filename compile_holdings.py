@@ -2443,7 +2443,7 @@ function renderSS(){{
   const sumHold  = SS_DATA.reduce((s,r)=>s+(r.net_holding||0),0);
   const sumBuyAmt= SS_DATA.reduce((s,r)=>s+(r.total_buy_amt||0),0);
   const sumSaleAmt=SS_DATA.reduce((s,r)=>s+(r.total_sale_amt||0),0);
-  const sumHoldAmt=SS_DATA.reduce((s,r)=>s+(r.hold_amt||0),0);
+  const sumHoldAmt=SS_DATA.reduce((s,r)=>s+(r.hold_net_amt||0),0);
   const avgBuyRate = sumBuy>0  ? Math.round((sumBuyAmt/sumBuy)*100)/100  : 0;
   const avgSaleRate= sumSale>0 ? Math.round((sumSaleAmt/sumSale)*100)/100: 0;
   const avgHoldRate= sumHold>0 ? Math.round((sumHoldAmt/sumHold)*100)/100: 0;
@@ -2527,23 +2527,23 @@ async function loadScriptSummary(){{
         symbol:s, security_name:r.security_name||'',
         total_buy_qty:0, total_buy_amt:0,
         total_sale_qty:0, total_sale_amt:0,
-        net_holding:0, hold_amt:0,
+        net_holding:0, hold_net_amt:0,
       }};
-      symMap[s].total_buy_qty  +=(r.buy_qty||0);
-      symMap[s].total_buy_amt  +=(r.buy_amt||0);
-      symMap[s].total_sale_qty +=(r.total_sale_qty||0);
-      symMap[s].total_sale_amt +=(r.bulk_sale_amt||0);
-      symMap[s].net_holding    +=(r.holding_qty||0);
-      // Weighted holding amount
-      const hq=r.holding_qty||0;
-      if(hq>0) symMap[s].hold_amt+=(hq*(r.avg_rate||0));
+      symMap[s].total_buy_qty   +=(r.buy_qty||0);
+      symMap[s].total_buy_amt   +=(r.buy_amt||0);
+      symMap[s].total_sale_qty  +=(r.total_sale_qty||0);
+      symMap[s].total_sale_amt  +=(r.bulk_sale_amt||0);
+      symMap[s].net_holding     +=(r.holding_qty||0);
+      // Hold rate = (buy_amt - bulk_sale_amt) / holding_qty
+      symMap[s].hold_net_amt    +=(r.buy_amt||0)-(r.bulk_sale_amt||0);
     }}
 
     // Compute avg rates
     SS_DATA=Object.values(symMap).map(r=>{{
       r.avg_buy_rate  = r.total_buy_qty>0  ? Math.round((r.total_buy_amt/r.total_buy_qty)*100)/100   : 0;
       r.avg_sale_rate = r.total_sale_qty>0 ? Math.round((r.total_sale_amt/r.total_sale_qty)*100)/100 : 0;
-      r.avg_hold_rate = r.net_holding>0    ? Math.round((r.hold_amt/r.net_holding)*100)/100          : 0;
+      // avg_hold_rate = (total_buy_amt - total_bulk_sale_amt) / net_holding
+      r.avg_hold_rate = r.net_holding>0    ? Math.round((r.hold_net_amt/r.net_holding)*100)/100      : 0;
       return r;
     }});
 
