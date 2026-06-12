@@ -934,6 +934,7 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
   <!-- TABS -->
   <div class="tabs">
     <div class="tab active" onclick="showTab('daily')">Daily Holdings</div>
+    <div class="tab" onclick="showTab('script')">Script Summary</div>
     <div class="tab" onclick="showTab('cumul')">Cumulative</div>
     <div class="tab" onclick="showTab('topb')">Top Brokers Chart</div>
     <div class="tab" onclick="showTab('mkt')">Market Summary</div>
@@ -971,6 +972,58 @@ td{{padding:8px 12px;font-size:13px;white-space:nowrap}}
         <div class="pbtns">
           <button class="pb" id="pp-d" onclick="chpg(-1,'d')" disabled>← Prev</button>
           <button class="pb" id="pn-d" onclick="chpg(1,'d')"  disabled>Next →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 1b: SCRIPT SUMMARY -->
+  <div id="tab-script" style="display:none">
+    <div class="tw" style="margin-bottom:14px">
+      <div class="th2">
+        <span class="ttitle">Script Summary — Buy, Sale &amp; Accumulation per Script</span>
+        <span class="tcnt" id="ss-cnt">—</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);align-items:flex-end">
+        <div class="fg"><label>Date</label>
+          <input type="date" id="ss-date"></div>
+        <div class="btns">
+          <button class="btn btn-p" onclick="loadScriptSummary()">🔍 Load</button>
+          <button class="btn btn-g" onclick="document.getElementById('ss-date').value='';loadScriptSummary()">Latest</button>
+        </div>
+        <span id="ss-date-label" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div class="tscroll"><table>
+        <thead>
+          <tr id="ss-summary-row" style="display:none;background:var(--s2);font-weight:600;border-top:2px solid var(--border2)">
+            <td colspan="2" class="m" style="color:var(--muted);font-size:11px" id="ss-sum-label">∑ Total</td>
+            <td class="m pos" id="ss-sum-buy">—</td>
+            <td class="m" id="ss-sum-buy-rate">—</td>
+            <td class="m neg" id="ss-sum-sale">—</td>
+            <td class="m" id="ss-sum-sale-rate">—</td>
+            <td class="m pos" id="ss-sum-accum">—</td>
+            <td class="m" id="ss-sum-accum-rate">—</td>
+          </tr>
+          <tr>
+            <th onclick="sortSS('symbol')" style="cursor:pointer"># / Symbol ↕</th>
+            <th onclick="sortSS('security_name')" style="cursor:pointer">Security Name ↕</th>
+            <th onclick="sortSS('total_buy_qty')" style="cursor:pointer">Total Buy ↕</th>
+            <th onclick="sortSS('avg_buy_rate')" style="cursor:pointer">Buy Rate ↕</th>
+            <th onclick="sortSS('total_sale_qty')" style="cursor:pointer">Total Sale ↕</th>
+            <th onclick="sortSS('avg_sale_rate')" style="cursor:pointer">Sale Rate ↕</th>
+            <th onclick="sortSS('net_holding')" style="cursor:pointer">Net Holding ↕</th>
+            <th onclick="sortSS('avg_hold_rate')" style="cursor:pointer">Hold Rate ↕</th>
+          </tr>
+        </thead>
+        <tbody id="ss-tbody">
+          <tr><td colspan="8"><div class="empty">Click Load to see script summary.</div></td></tr>
+        </tbody>
+      </table></div>
+      <div class="pag">
+        <span id="ss-pi">—</span>
+        <div class="pbtns">
+          <button class="pb" id="ss-pp" onclick="chpg(-1,'ss')" disabled>← Prev</button>
+          <button class="pb" id="ss-pn" onclick="chpg(1,'ss')"  disabled>Next →</button>
         </div>
       </div>
     </div>
@@ -2357,6 +2410,155 @@ function updateDailySummary(data){{
   document.getElementById('daily-sum-rate').textContent = sumHold>0 ? 'Rs '+fmtf(avgRate) : '—';
 }}
 
+// ── SCRIPT SUMMARY ──────────────────────────────────────────────────────────
+let SS_DATA=[], ssSortCol='total_buy_qty', ssSortAsc=false;
+
+function sortSS(col){{
+  if(ssSortCol===col) ssSortAsc=!ssSortAsc;
+  else{{ssSortCol=col; ssSortAsc=false;}}
+  renderSS();
+}}
+
+function renderSS(){{
+  const PS=100;
+  const p=pg.ss||1;
+  const sorted=[...SS_DATA].sort((a,b)=>{{
+    let va=a[ssSortCol],vb=b[ssSortCol];
+    if(typeof va==='number') return ssSortAsc?va-vb:vb-va;
+    return ssSortAsc?String(va||'').localeCompare(String(vb||'')):String(vb||'').localeCompare(String(va||''));
+  }});
+  const tot=sorted.length, pages=Math.max(1,Math.ceil(tot/PS));
+  pg.ss=Math.min(p,pages);
+  const sl=sorted.slice((pg.ss-1)*PS, pg.ss*PS);
+  const off=(pg.ss-1)*PS;
+
+  document.getElementById('ss-cnt').textContent=tot.toLocaleString()+' scripts';
+  document.getElementById('ss-pi').textContent='Page '+pg.ss+' of '+pages;
+  document.getElementById('ss-pp').disabled=pg.ss<=1;
+  document.getElementById('ss-pn').disabled=pg.ss>=pages;
+
+  // Summary totals across all rows
+  const sumBuy   = SS_DATA.reduce((s,r)=>s+(r.total_buy_qty||0),0);
+  const sumSale  = SS_DATA.reduce((s,r)=>s+(r.total_sale_qty||0),0);
+  const sumHold  = SS_DATA.reduce((s,r)=>s+(r.net_holding||0),0);
+  const sumBuyAmt= SS_DATA.reduce((s,r)=>s+(r.total_buy_amt||0),0);
+  const sumSaleAmt=SS_DATA.reduce((s,r)=>s+(r.total_sale_amt||0),0);
+  const sumHoldAmt=SS_DATA.reduce((s,r)=>s+(r.hold_amt||0),0);
+  const avgBuyRate = sumBuy>0  ? Math.round((sumBuyAmt/sumBuy)*100)/100  : 0;
+  const avgSaleRate= sumSale>0 ? Math.round((sumSaleAmt/sumSale)*100)/100: 0;
+  const avgHoldRate= sumHold>0 ? Math.round((sumHoldAmt/sumHold)*100)/100: 0;
+
+  const sumRow=document.getElementById('ss-summary-row');
+  sumRow.style.display='';
+  document.getElementById('ss-sum-label').textContent='∑ '+tot+' scripts (all pages)';
+  document.getElementById('ss-sum-buy').textContent=fmt(sumBuy);
+  document.getElementById('ss-sum-buy-rate').textContent='Rs '+fmtf(avgBuyRate);
+  document.getElementById('ss-sum-sale').textContent=fmt(sumSale);
+  document.getElementById('ss-sum-sale-rate').textContent='Rs '+fmtf(avgSaleRate);
+  document.getElementById('ss-sum-accum').textContent=fmt(sumHold);
+  document.getElementById('ss-sum-accum-rate').textContent=sumHold>0?'Rs '+fmtf(avgHoldRate):'—';
+
+  const tb=document.getElementById('ss-tbody');
+  if(!sl.length){{
+    tb.innerHTML='<tr><td colspan="8"><div class="empty">No data.</div></td></tr>';
+    return;
+  }}
+  const medals=['🥇','🥈','🥉'];
+  tb.innerHTML=sl.map((r,i)=>{{
+    const rank=off+i+1;
+    const nhcls=(r.net_holding||0)>=0?'pos':'neg';
+    return '<tr>'
+      +'<td class="m" style="color:var(--muted)">'+(medals[rank-1]||rank)+'</td>'
+      +'<td class="sym">'+r.symbol+'</td>'
+      +'<td class="m pos">'+fmt(r.total_buy_qty||0)+'</td>'
+      +'<td class="m" style="color:var(--amber)">Rs '+fmtf(r.avg_buy_rate||0)+'</td>'
+      +'<td class="m neg">'+fmt(r.total_sale_qty||0)+'</td>'
+      +'<td class="m" style="color:var(--amber)">Rs '+fmtf(r.avg_sale_rate||0)+'</td>'
+      +'<td class="m '+nhcls+'">'+fmt(r.net_holding||0)+'</td>'
+      +'<td class="m" style="color:var(--amber)">'+(r.net_holding>0?'Rs '+fmtf(r.avg_hold_rate||0):'—')+'</td>'
+      +'</tr>';
+  }}).join('');
+}}
+
+async function loadScriptSummary(){{
+  const dateInput = document.getElementById('ss-date').value;
+  document.getElementById('ss-cnt').textContent='Loading…';
+  document.getElementById('ss-tbody').innerHTML=
+    '<tr><td colspan="8"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>';
+  document.getElementById('ss-summary-row').style.display='none';
+
+  try{{
+    // Get target date — use input or fetch latest
+    let targetDate = dateInput;
+    if(!targetDate){{
+      const {{data:latestRows}}=await sb.from('daily_volume')
+        .select('date').order('date',{{ascending:false}}).limit(1);
+      targetDate = latestRows?.[0]?.date;
+      if(!targetDate) throw new Error('No data found');
+    }}
+    document.getElementById('ss-date-label').textContent='Showing: '+targetDate;
+    if(!dateInput) document.getElementById('ss-date').value=targetDate;
+
+    // Fetch all holdings for target date
+    let rows=[], off=0, lim=1000;
+    while(true){{
+      const {{data,error}}=await sb.from('holdings')
+        .select('symbol,security_name,buy_qty,buy_amt,total_sale_qty,bulk_sale_qty,bulk_sale_amt,holding_qty,avg_rate')
+        .eq('date',targetDate)
+        .range(off,off+lim-1);
+      if(error) throw error;
+      rows.push(...(data||[]));
+      if(!data||data.length<lim) break;
+      off+=lim;
+    }}
+
+    if(!rows.length){{
+      document.getElementById('ss-cnt').textContent='No data for '+targetDate;
+      document.getElementById('ss-tbody').innerHTML=
+        '<tr><td colspan="8"><div class="empty">No holdings data for '+targetDate+'.</div></td></tr>';
+      return;
+    }}
+
+    // Aggregate per symbol
+    const symMap={{}};
+    for(const r of rows){{
+      const s=r.symbol;
+      if(!symMap[s]) symMap[s]={{
+        symbol:s, security_name:r.security_name||'',
+        total_buy_qty:0, total_buy_amt:0,
+        total_sale_qty:0, total_sale_amt:0,
+        net_holding:0, hold_amt:0,
+      }};
+      symMap[s].total_buy_qty  +=(r.buy_qty||0);
+      symMap[s].total_buy_amt  +=(r.buy_amt||0);
+      symMap[s].total_sale_qty +=(r.total_sale_qty||0);
+      symMap[s].total_sale_amt +=(r.bulk_sale_amt||0);
+      symMap[s].net_holding    +=(r.holding_qty||0);
+      // Weighted holding amount
+      const hq=r.holding_qty||0;
+      if(hq>0) symMap[s].hold_amt+=(hq*(r.avg_rate||0));
+    }}
+
+    // Compute avg rates
+    SS_DATA=Object.values(symMap).map(r=>{{
+      r.avg_buy_rate  = r.total_buy_qty>0  ? Math.round((r.total_buy_amt/r.total_buy_qty)*100)/100   : 0;
+      r.avg_sale_rate = r.total_sale_qty>0 ? Math.round((r.total_sale_amt/r.total_sale_qty)*100)/100 : 0;
+      r.avg_hold_rate = r.net_holding>0    ? Math.round((r.hold_amt/r.net_holding)*100)/100          : 0;
+      return r;
+    }});
+
+    pg.ss=1;
+    ssSortCol='total_buy_qty'; ssSortAsc=false;
+    renderSS();
+
+  }}catch(e){{
+    console.error('Script summary error:',e);
+    document.getElementById('ss-cnt').textContent='Error';
+    document.getElementById('ss-tbody').innerHTML=
+      '<tr><td colspan="8"><div class="empty">Error: '+e.message+'</div></td></tr>';
+  }}
+}}
+
 function renderD(){{
   const data=doSort(FD,dCol,dAsc);
   const tot=data.length,pages=Math.max(1,Math.ceil(tot/PS));
@@ -2616,13 +2818,14 @@ function renderChart(sym){{
 }}
 
 function showTab(name){{
-  ['daily','cumul','topb','mkt','cmp','mds'].forEach(t=>{{
+  ['daily','script','cumul','topb','mkt','cmp','mds'].forEach(t=>{{
     document.getElementById('tab-'+t).style.display=t===name?'':'none';
   }});
   document.querySelectorAll('.tab').forEach((el,i)=>{{
     el.classList.toggle('active',['daily','cumul','topb','mkt','cmp'][i]===name);
   }});
   if(name==='topb'){{renderChart(document.getElementById('f-sym').value);loadTopbTable();}}
+  if(name==='script'&&!SS_DATA.length) loadScriptSummary();
   if(name==='mkt')  loadMarketSummary();
   if(name==='cmp')  initCmp();
 }}
